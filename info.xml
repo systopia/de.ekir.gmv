@@ -32,4 +32,3 @@
     <namespace>CRM/Gmv</namespace>
   </civix>
 </extension>
-    Parse error in extension: Failed to parse info XML: Line=11 Column=2 Code=68: StartTag: invalid element name Line=11 Column=3 Code=68: StartTag: invalid element name Line=11 Column=4 Code=68: StartTag: invalid element name Line=11 Column=5 Code=68: StartTag: invalid element name Line=11 Column=6 Code=68: StartTag: invalid element name Line=11 Column=7 Code=68: StartTag: invalid element name Line=11 Column=8 Code=68: StartTag: invalid element name
