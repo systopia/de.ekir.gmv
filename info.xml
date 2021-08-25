@@ -20,6 +20,10 @@
   <compatibility>
     <ver>5.0</ver>
   </compatibility>
+  <requires>
+    <ext>de.systopia.xcm</ext>
+    <ext>de.systopia.identitytracker</ext>
+  </requires>
   <comments></comments>
   <classloader>
     <psr4 prefix="Civi\" path="Civi"/>
