@@ -27,13 +27,15 @@ class CRM_Gmv_Form_GmvZipUpload extends CRM_Core_Form
         $this->setTitle("GMV ZIP Importer");
 
         $this->add(
-            'File',
+            'file',
             'gmv_zip',
-            "GMV ZIP",
-            'size=30 maxlength=255 accept=application/zip',
+            ts('Import Data File'),
+            'size=30 maxlength=255',
             TRUE
         );
-        $this->setMaxFileSize('8m');
+
+        $max_size = CRM_Utils_Number::formatUnitSize(1024 * 1024 * 8, true);
+        $this->setMaxFileSize($max_size);
 
         $this->addButtons([
               [
@@ -49,6 +51,13 @@ class CRM_Gmv_Form_GmvZipUpload extends CRM_Core_Form
     public function postProcess()
     {
         $zip_file_data = $this->_submitFiles['gmv_zip'];
+        if (!empty($zip_file_data['error']) || empty($zip_file_data['tmp_name'])) {
+            CRM_Core_Session::setStatus("Eventuell einmal die PHP file upload Einstellungen prüfen.", "Upload fehlgeschlagen", 'error');
+        } else {
+            // get new folder from controller
+            // unzip files
+            // redirect to 
+        }
         parent::postProcess();
     }
 
