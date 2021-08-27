@@ -83,18 +83,119 @@ class CRM_Gmv_ImportController
         return substr($this->folder, strlen($base_folder) + 1);
     }
 
+    /**
+     * log message
+     */
+    public function log($message, $level = 'info', $context = []) {
+        // todo: implement log to file
+        Civi::log()->log($level, $message, $context);
+    }
+
 
     /**
      * Return the base folder for all import data
      *
      * @return string
      */
-    protected static function getBaseFolder()
+    public static function getBaseFolder()
     {
         $path = Civi::paths()->getPath('[civicrm.files]/gmv_imports');
         if (!file_exists($path)) {
             mkdir($path);
         }
         return $path;
+    }
+
+    /**
+     * Get the full file name of an import file
+     *
+     * @param $file_name string
+     *  local file name
+     *
+     * @return string
+     *  full file path
+     */
+    public function getImportFile($file_name)
+    {
+        $file_path = $this->getDataPath() . DIRECTORY_SEPARATOR . $file_name;
+        if (!file_exists($file_path)) {
+            $this->log("File '{$file_name}' not found!", 'error');
+        }
+        if (!is_readable($file_path)) {
+            $this->log("File '{$file_name}' cannot be read!", 'error');
+        }
+        return $file_path;
+    }
+
+    /**
+     * Return the base folder for all import data
+     *
+     * @return string
+     */
+    public static function getFullPath($folder_name)
+    {
+        return self::getBaseFolder() . DIRECTORY_SEPARATOR . $folder_name;
+    }
+
+
+    /********************************************************************
+     *                         IMPORT CODE                              *
+     *******************************************************************/
+
+    /**
+     * Run the given import
+     */
+    public function run()
+    {
+        $this->log("Starting GMZ importer on: " . $this->getFolder());
+        $this->syncDataStructures();
+        $this->loadLists();
+        $this->syncOptionGroups();
+        $this->loadContacts();
+        $this->syncContacts();
+    }
+
+
+    /**
+     * Synchronise the data structures with the custom data helper
+     */
+    protected function syncDataStructures()
+    {
+        $this->log("Syncing XXX");
+        // todo
+    }
+
+    /**
+     * Load the option groups listed in the files
+     */
+    protected function loadLists()
+    {
+        $salutations = (new CRM_Gmv_Entity_SalutationList($this,
+            $this->getImportFile('ekir_gmv/salutation.csv'),
+            'id', 'designation'))->load();
+    }
+
+    /**
+     * Apply the option groups
+     */
+    protected function syncOptionGroups()
+    {
+        // todo
+    }
+
+    /**
+     * Apply the option groups
+     */
+    protected function loadContacts()
+    {
+        // todo
+    }
+
+    /**
+     * Apply the option groups
+     */
+    protected function syncContacts()
+    {
+        // todo
     }
 }

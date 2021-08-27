@@ -15,24 +15,29 @@
 
 use CRM_Gmv_ExtensionUtil as E;
 
-class CRM_Gmv_Page_ImportRunner extends CRM_Core_Page
-{
+/**
+ * Run the GMV import with the given data folder
+ */
+function _civicrm_api3_g_m_v_sync_spec(&$params) {
+    $params['data'] = [
+        'name'         => 'data',
+        'api.required' => 1,
+        'type'         => CRM_Utils_Type::T_STRING,
+        'title'        => 'Data Folder',
+        'description'  => 'GMV Data Folder to run the import with',
+    ];
+}
 
-    public function run()
-    {
-        CRM_Utils_System::setTitle("Importer");
-
-        $folder = CRM_Utils_Request::retrieve('folder', 'String');
-        $full_path = CRM_Gmv_ImportController::getFullPath($folder);
+/**
+ * Run the GMV import with the given data folder
+ */
+function civicrm_api3_g_m_v_sync($params) {
+    try {
+        $full_path = CRM_Gmv_ImportController::getFullPath($params['data']);
         $controller = CRM_Gmv_ImportController::getController($full_path);
-
-        // assign some vars
-        $this->assign('import_id', $folder);
-        $this->assign('full_path', $full_path);
-        $this->assign('environment', strstr($full_path, '/dev/') ? 'dev' : 'pro');
-
-        // check dev environment
-        parent::run();
+        $controller->run();
+    } catch (Exception $ex) {
+        throw new CiviCRM_API3_Exception($ex->getMessage(), 0, $params, $ex);
     }
-
+    return civicrm_api3_create_success();
 }

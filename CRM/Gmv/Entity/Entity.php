@@ -15,24 +15,18 @@
 
 use CRM_Gmv_ExtensionUtil as E;
 
-class CRM_Gmv_Page_ImportRunner extends CRM_Core_Page
+/**
+ * Entity Importer base
+ */
+class CRM_Gmv_Entity_Entity extends CRM_Gmv_Entity_Base
 {
+    /** @var string the name of the entity (in APIv3) */
+    protected $entity;
 
-    public function run()
+    public function __construct($entity, $file)
     {
-        CRM_Utils_System::setTitle("Importer");
-
-        $folder = CRM_Utils_Request::retrieve('folder', 'String');
-        $full_path = CRM_Gmv_ImportController::getFullPath($folder);
-        $controller = CRM_Gmv_ImportController::getController($full_path);
-
-        // assign some vars
-        $this->assign('import_id', $folder);
-        $this->assign('full_path', $full_path);
-        $this->assign('environment', strstr($full_path, '/dev/') ? 'dev' : 'pro');
-
-        // check dev environment
-        parent::run();
+        parent::__construct($file);
+        $this->entity = $entity;
     }
 
 }

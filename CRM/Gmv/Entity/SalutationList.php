@@ -15,24 +15,27 @@
 
 use CRM_Gmv_ExtensionUtil as E;
 
-class CRM_Gmv_Page_ImportRunner extends CRM_Core_Page
+/**
+ * Entity Importer base
+ */
+class CRM_Gmv_Entity_SalutationList extends CRM_Gmv_Entity_List
 {
-
-    public function run()
+    /**
+     * Simply strip the 5 first characters
+     *
+     * @return array|null
+     */
+    public function load()
     {
-        CRM_Utils_System::setTitle("Importer");
+        parent::load();
 
-        $folder = CRM_Utils_Request::retrieve('folder', 'String');
-        $full_path = CRM_Gmv_ImportController::getFullPath($folder);
-        $controller = CRM_Gmv_ImportController::getController($full_path);
+        // strip the first 5 characters off the value
+        foreach ($this->data as $key => &$value) {
+            $value = preg_replace('/^Herr/', '', $value);
+            $value = preg_replace('/^Frau/', '', $value);
+            $value = trim($value);
+        }
 
-        // assign some vars
-        $this->assign('import_id', $folder);
-        $this->assign('full_path', $full_path);
-        $this->assign('environment', strstr($full_path, '/dev/') ? 'dev' : 'pro');
-
-        // check dev environment
-        parent::run();
+        return $this->data;
     }
-
 }

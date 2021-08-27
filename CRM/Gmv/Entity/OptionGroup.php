@@ -15,24 +15,15 @@
 
 use CRM_Gmv_ExtensionUtil as E;
 
-class CRM_Gmv_Page_ImportRunner extends CRM_Core_Page
+/**
+ * Import Controller
+ */
+class CRM_Gmv_Entity_OptionGroup extends CRM_Gmv_Entity_Entity
 {
-
-    public function run()
+    public function __construct($file)
     {
-        CRM_Utils_System::setTitle("Importer");
+        parent::__construct('OptionGroup', $file);
 
-        $folder = CRM_Utils_Request::retrieve('folder', 'String');
-        $full_path = CRM_Gmv_ImportController::getFullPath($folder);
-        $controller = CRM_Gmv_ImportController::getController($full_path);
-
-        // assign some vars
-        $this->assign('import_id', $folder);
-        $this->assign('full_path', $full_path);
-        $this->assign('environment', strstr($full_path, '/dev/') ? 'dev' : 'pro');
-
-        // check dev environment
-        parent::run();
     }
 
 }

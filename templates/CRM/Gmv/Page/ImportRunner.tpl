@@ -12,16 +12,19 @@
 | written permission from the original author(s).        |
 +-------------------------------------------------------*}
 
-<h3>Process: {$import_id}</h3>
+<h3>Import-Prozess: {$import_id}</h3>
 
-<textarea style="overflow:auto; width:100%; resize: none;" name="import_log" placeholder="Starting...."></textarea>
+<div id="help">Aktuell kann der Import-Prozess nur manuell über die Server-Konsole ausgeführt werden. Ggf wird es später aber eine Umsetzung geben, die direkt aus dem System heraus aufgerufen wird.</div>
 
-{literal}
-<script>
-  cj(document).ready(function () {
-    // kick off importer process
-    CRM.api3('Contact', 'get', ['first_name' => 'test']);
-    cj("[name=import_log]").val("TEST");
-  });
-</script>
-{/literal}
+<div>
+  Schritte für den Import
+  <ol>
+    <li>Auf dem Server einloggen: <br/><code>ssh civirm@vs1170.mymanaged.host</code></li>
+    <li>Wartungsmodus setzen:<br/><code>nohup cvi drush {$environment} vset maintenance_mode 1</code></li>
+    <li>Backup machen:<br/><code>cvi backup -c {$environment} GMVImport</code></li>
+    <li>Dort eingeben: <br/><code>nohup cvi drush {$environment} cvapi GMV.sync data={$import_id} &</code></li>
+    <li>Dann Log verfolgen: <br/><code>tail -f {$full_path}/import.log</code></li>
+    <li>Ergebnisse prüfen</code></li>
+    <li>Wartungsmodus aufheben:<br/><code>nohup cvi drush {$environment} vset maintenance_mode 0</code></li>
+  </ol>
+</div>
