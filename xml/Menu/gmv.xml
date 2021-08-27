@@ -6,4 +6,10 @@
     <title>GMZ Upload</title>
     <access_arguments>administer CiviCRM</access_arguments>
   </item>
+  <item>
+    <path>civicrm/gmv/import</path>
+    <page_callback>CRM_Gmv_Page_ImportRunner</page_callback>
+    <title>Import Runner</title>
+    <access_arguments>administer CiviCRM</access_arguments>
+  </item>
 </menu>

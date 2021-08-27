@@ -55,8 +55,21 @@ class CRM_Gmv_Form_GmvZipUpload extends CRM_Core_Form
             CRM_Core_Session::setStatus("Eventuell einmal die PHP file upload Einstellungen prüfen.", "Upload fehlgeschlagen", 'error');
         } else {
             // get new folder from controller
+            $controller = CRM_Gmv_ImportController::getController();
+            $data_path = $controller->getDataPath();
+
             // unzip files
-            // redirect to 
+            chdir($data_path);
+            $zip = new ZipArchive();
+            if ($zip->open($zip_file_data['tmp_name']) === TRUE) {
+                $zip->extractTo($data_path);
+                $zip->close();
+            } else {
+                throw new Exception("Couldn't open zip archive " . $zip_file_data['tmp_name']);
+            }
+
+            // redirect to the runner page
+            CRM_Utils_System::redirect(CRM_Utils_System::url('civicrm/gmv/import', 'folder=' . $controller->getFolder()));
         }
         parent::postProcess();
     }
