@@ -26,6 +26,10 @@ class CRM_Gmv_Entity_List extends CRM_Gmv_Entity_Base
     /** @var $label_column string */
     protected $label_column;
 
+    /** @var $default_value string */
+    protected $default_value = '';
+
+
     /**
      * value => label
      */
@@ -50,6 +54,28 @@ class CRM_Gmv_Entity_List extends CRM_Gmv_Entity_Base
             $this->log(E::ts("%1 value/label pairs loaded", [1 => count($this->data)]));
         }
 
-        return $this->data;
+        return $this;
+    }
+
+    /**
+     * Use the list to map up a value
+     *
+     * @param $value string the value to look up in the list
+     * @param $strict boolean log an error if the value is not found
+     *
+     * @return string the looked up label to the value
+     */
+    public function map($value, $strict = true)
+    {
+        if (isset($this->data[$value])) {
+            // data found
+            return $this->data[$value];
+        } else {
+            // data NOT found
+            if ($strict && $value !== '') {
+                $this->log("Label for value '{$value}' not found. Setting to '{$this->default_value}'.", 'warn');
+            }
+            return $this->default_value;
+        }
     }
 }

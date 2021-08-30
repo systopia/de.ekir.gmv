@@ -18,24 +18,11 @@ use CRM_Gmv_ExtensionUtil as E;
 /**
  * Entity Importer base
  */
-class CRM_Gmv_Entity_SalutationList extends CRM_Gmv_Entity_List
+class CRM_Gmv_Entity_Contact extends CRM_Gmv_Entity_Entity
 {
-    /**
-     * Simply strip the 5 first characters
-     *
-     * @return array|null
-     */
-    public function load()
+    public function __construct($controller, $entity, $file)
     {
-        parent::load();
-
-        // strip the first 5 characters off the value
-        foreach ($this->data as $key => &$value) {
-            $value = preg_replace('/^Herr/', '', $value);
-            $value = preg_replace('/^Frau/', '', $value);
-            $value = trim($value);
-        }
-
-        return $this;
+        parent::__construct($controller, $entity, $file);
     }
+
 }

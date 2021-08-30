@@ -142,6 +142,17 @@ class CRM_Gmv_ImportController
      *                         IMPORT CODE                              *
      *******************************************************************/
 
+    // data
+    /** @var CRM_Gmv_Entity_List list of individual prefixes by ID */
+    public $salutations = null;
+
+    /** @var CRM_Gmv_Entity_List list of job_titles by ID */
+    public $occupations = null;
+
+    /** @var CRM_Gmv_Entity_List list of 'departments' by ID */
+    public $departments = null;
+
+
     /**
      * Run the given import
      */
@@ -150,9 +161,11 @@ class CRM_Gmv_ImportController
         $this->log("Starting GMZ importer on: " . $this->getFolder());
         $this->syncDataStructures();
         $this->loadLists();
-        $this->syncOptionGroups();
+        $this->loadContactDetails();
         $this->loadContacts();
         $this->syncContacts();
+//        $this->loadOrganisations();
+//        $this->syncOrganisations();
     }
 
 
@@ -170,17 +183,25 @@ class CRM_Gmv_ImportController
      */
     protected function loadLists()
     {
-        $salutations = (new CRM_Gmv_Entity_SalutationList($this,
+        $this->salutations = (new CRM_Gmv_Entity_SalutationList($this,
             $this->getImportFile('ekir_gmv/salutation.csv'),
+            'id', 'designation'))->load();
+
+        $this->occupations = (new CRM_Gmv_Entity_List($this,
+            $this->getImportFile('ekir_gmv/occupation.csv'),
+           'id', 'designation'))->load();
+
+        $this->departments = (new CRM_Gmv_Entity_List($this,
+            $this->getImportFile('ekir_gmv/department_designation.csv'),
             'id', 'designation'))->load();
     }
 
     /**
-     * Apply the option groups
+     * Load the option groups listed in the files
      */
-    protected function syncOptionGroups()
+    protected function loadContactDetails()
     {
-        // todo
+
     }
 
     /**
@@ -188,7 +209,9 @@ class CRM_Gmv_ImportController
      */
     protected function loadContacts()
     {
-        // todo
+        $this->individuals = (new CRM_Gmv_Entity_Individual($this,
+            $this->getImportFile('ekir_gmv/person.csv')))->load();
+        $this->log("Contact data loaded.");
     }
 
     /**
@@ -196,6 +219,7 @@ class CRM_Gmv_ImportController
      */
     protected function syncContacts()
     {
+
         // todo
     }
 }

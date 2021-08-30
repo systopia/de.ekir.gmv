@@ -62,6 +62,7 @@ class CRM_Gmv_Entity_Base
      */
     public function getRawData($columns)
     {
+        $this->log("Opening file '{$this->file}'...");
         $fd = fopen($this->file, 'r');
         if (!$fd) {
             $this->log("Couldn't open file.", 'error');
