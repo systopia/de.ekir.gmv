@@ -27,11 +27,11 @@ class CRM_Gmv_Entity_Individual extends CRM_Gmv_Entity_Contact
         'firstname' => 'first_name',
         'lastname' => 'last_name',
         'birthdate' => 'birth_date',
-        'function' => 'todo_function',
         'gender' => 'gender_id',
         'department_designation_id' => 'job_title',
         'salutation_id' => 'formal_title',
         // pending
+        'function' => 'todo_function',
         'status' => 'todo_contact_status',
         'ordination_status' => 'todo_ordination_status',
         'martial_status' => 'todo_martial_status',
@@ -42,9 +42,14 @@ class CRM_Gmv_Entity_Individual extends CRM_Gmv_Entity_Contact
         'department_since' => 'todo_department_since',
     ];
 
-    protected $gender_map = [
+    protected $gender_map = [  // todo: live lookup needed?
         '0' => '2', // male
         '1' => '1', // female
+    ];
+
+    protected $prefix_map = [  // todo: live lookup needed?
+        '0' => '2', // Herr
+        '1' => '1', // Frau
     ];
 
     public function __construct($controller, $file)
@@ -63,11 +68,13 @@ class CRM_Gmv_Entity_Individual extends CRM_Gmv_Entity_Contact
             $this->entity_data = $this->getRawData(array_keys($this->data_mapping));
             $this->renameKeys($this->data_mapping);
             $this->setEntityValue('contact_type', 'Individual');
+            $this->copyEntityValue('gender_id', 'individual_prefix');
 
             // do some lookups
             $this->mapEntityListValues('job_title', $this->controller->occupations);
             $this->mapEntityListValues('formal_title', $this->controller->salutations);
             $this->mapEntityValues('gender_id', $this->gender_map);
+            $this->mapEntityValues('individual_prefix', $this->prefix_map);
         }
 
         return $this;

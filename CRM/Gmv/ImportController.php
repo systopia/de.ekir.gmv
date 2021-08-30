@@ -201,7 +201,7 @@ class CRM_Gmv_ImportController
      */
     protected function loadContactDetails()
     {
-
+        // todo: what?
     }
 
     /**
@@ -219,6 +219,8 @@ class CRM_Gmv_ImportController
      */
     protected function syncContacts()
     {
+        $this->individuals->sync();
+        $this->individuals->sync();
 
         // todo
     }

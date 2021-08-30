@@ -84,6 +84,20 @@ class CRM_Gmv_Entity_Entity extends CRM_Gmv_Entity_Base
     }
 
     /**
+     * Copy the current values from one key to another
+     *
+     * @param string $key
+     * @param string $new_key
+     */
+    public function copyEntityValue($key, $new_key)
+    {
+        foreach ($this->entity_data as &$entity) {
+            $entity[$new_key] = CRM_Utils_Array::value($key, $entity);
+        }
+    }
+
+
+    /**
      * Apply a mapping to the entity data
      *
      * @param $property string property name
