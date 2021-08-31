@@ -30,16 +30,16 @@ class CRM_Gmv_Entity_Individual extends CRM_Gmv_Entity_Contact
         'gender' => 'gender_id',
         'department_designation_id' => 'job_title',
         'salutation_id' => 'formal_title',
-        // pending
-        'function' => 'todo_function',
-        'status' => 'todo_contact_status',
-        'ordination_status' => 'todo_ordination_status',
-        'martial_status' => 'todo_martial_status',
-        'historical' => 'todo_historical',
-        'visible_in_search' => 'todo_visible_in_search',
-        'department_end' => 'todo_department_end',
-        'department_end_reason' => 'todo_department_end_reason',
-        'department_since' => 'todo_department_since',
+        // todo: more of the following:
+//        'function' => 'todo_function',
+//        'status' => 'todo_contact_status',
+//        'ordination_status' => 'todo_ordination_status',
+//        'martial_status' => 'todo_martial_status',
+//        'historical' => 'todo_historical',
+//        'visible_in_search' => 'todo_visible_in_search',
+//        'department_end' => 'todo_department_end',
+//        'department_end_reason' => 'todo_department_end_reason',
+//        'department_since' => 'todo_department_since',
     ];
 
     protected $gender_map = [  // todo: live lookup needed?
@@ -75,6 +75,12 @@ class CRM_Gmv_Entity_Individual extends CRM_Gmv_Entity_Contact
             $this->mapEntityListValues('formal_title', $this->controller->salutations);
             $this->mapEntityValues('gender_id', $this->gender_map);
             $this->mapEntityValues('individual_prefix', $this->prefix_map);
+
+            // add main address (for xcm)
+            $this->joinData($this->controller->addresses, 'id', 'address_data_link');
+
+            // add main email (for xcm)
+
         }
 
         return $this;

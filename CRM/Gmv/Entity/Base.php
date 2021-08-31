@@ -26,7 +26,21 @@ class CRM_Gmv_Entity_Base
     /** @var CRM_Gmv_ImportController controller */
     protected $controller;
 
+    /**
+     * @var string general CSV separator
+     */
     protected $csv_separator = ',';
+
+    /**
+     * Map used for boolean (t/f) to int (0/1)
+     * @var string[]
+     */
+    protected $true_false_map = [
+        't' => '1',
+        'f' => '0',
+        ''  => '0',
+    ];
+
 
     public function __construct($controller, $file)
     {
@@ -71,16 +85,41 @@ class CRM_Gmv_Entity_Base
         // read headers
         $headers = fgetcsv($fd, 0, $this->csv_separator);
 
+        // extract indices to import
+        $indices = [];
+        foreach ($headers as $index => $header) {
+            if (in_array($header, $columns)) {
+                $indices[$index] = $header;
+            }
+        }
+
         // read data
         $records = [];
         while ($record = fgetcsv($fd, 0, $this->csv_separator)) {
             $labeled_record = [];
-            foreach ($headers as $index => $header) {
+            foreach ($indices as $index => $header) {
                 $labeled_record[$header] = $record[$index];
             }
             $records[] = $labeled_record;
         }
         fclose($fd);
         return $records;
+    }
+
+    /**
+     * Run a CiviCRM API3 call
+     *
+     * @param $entity string
+     * @param $action string
+     * @param array $parameters
+     */
+    public function api3($entity, $action, $parameters = [])
+    {
+        try {
+            return $this->controller->api3($entity, $action, $parameters);
+        } catch (CiviCRM_API3_Exception $ex) {
+            $this->log("Error calling APIv3 ({$entity}.{$action}): " . $ex->getMessage());
+            throw $ex;
+        }
     }
 }

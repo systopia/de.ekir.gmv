@@ -1,0 +1,33 @@
+{
+  "_lookup": ["name"],
+  "_translate": ["title"],
+  "name": "remote_contact_data",
+  "title": "RemoteContact Information",
+  "extends": "Contact",
+  "collapse_display": "1",
+  "is_active": "1",
+  "is_multiple": "0",
+  "style": "Inline",
+  "table_name": "civicrm_value_remote_contact_data",
+  "collapse_adv_display": "0",
+  "is_reserved": "0",
+  "_fields": [
+    {
+      "_lookup": ["column_name", "custom_group_id"],
+      "_translate": ["label"],
+      "weight": "1",
+      "name": "remote_contact_roles",
+      "column_name": "roles",
+      "label": "Remote Roles",
+      "data_type": "String",
+      "html_type": "Multi-Select",
+      "option_group_id": "remote_contact_roles",
+      "is_required": "0",
+      "is_searchable": "1",
+      "is_search_range": "0",
+      "is_active": "1",
+      "is_view": "0",
+      "in_selector": "1"
+    }
+  ]
+}

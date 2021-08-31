@@ -36,7 +36,7 @@ class CRM_Gmv_Entity_Contact extends CRM_Gmv_Entity_Entity
             if ($contact_id) {
                 // contact already imported as GMV contact
                 $contact_record['id'] = $contact_id;
-                $new_contact_id = $this->runXCM($contact_record);
+                $this->runXCM($contact_record);
             } else {
                 // contact not yet a GMV contact
                 unset($contact_record['id']);
@@ -63,7 +63,7 @@ class CRM_Gmv_Entity_Contact extends CRM_Gmv_Entity_Entity
      */
     public function findGmvContact($gmv_id)
     {
-        $result = $controller->api3('Contact', 'findbyidentity', [
+        $result = $this->api3('Contact', 'findbyidentity', [
             'identifier' => $gmv_id,
             'identifier_type' => $this->controller->getGmvIdType(),
         ]);
@@ -78,7 +78,7 @@ class CRM_Gmv_Entity_Contact extends CRM_Gmv_Entity_Entity
      */
     public function markGmvContact($contact_id, $gmv_id)
     {
-        $controller->api3('Contact', 'addidentity', [
+        $this->api3('Contact', 'addidentity', [
             'contact_id' => $contact_id,
             'identifier' => $gmv_id,
             'identifier_type' => $this->controller->getGmvIdType(),
@@ -90,7 +90,7 @@ class CRM_Gmv_Entity_Contact extends CRM_Gmv_Entity_Entity
      */
     public function runXCM($contact_record)
     {
-        $result = $controller->api3('Contact', 'getorcreate', $contact_record);
+        $result = $this->api3('Contact', 'getorcreate', $contact_record);
         return $result['id'];
     }
 }

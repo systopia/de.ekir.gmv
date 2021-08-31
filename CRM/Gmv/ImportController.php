@@ -152,6 +152,12 @@ class CRM_Gmv_ImportController
     /** @var CRM_Gmv_Entity_List list of 'departments' by ID */
     public $departments = null;
 
+    /** @var CRM_Gmv_Entity_AddressData list address data, not linked to contacts (yet) */
+    public $address_data = null;
+
+    /** @var CRM_Gmv_Entity_AddressData list address data, not linked to contacts (yet) */
+    public $addresses = null;
+
 
     /**
      * Run the given import
@@ -201,7 +207,21 @@ class CRM_Gmv_ImportController
      */
     protected function loadContactDetails()
     {
-        // todo: what?
+        // addresses
+        $this->address_data = (new CRM_Gmv_Entity_AddressData($this, 'Address',
+            $this->getImportFile('ekir_gmv/address.csv')))->load();
+        $this->addresses = (new CRM_Gmv_Entity_Address($this, 'Address',
+          $this->getImportFile('ekir_gmv/addresses.csv')))->load();
+
+        // emails
+        $this->emails = (new CRM_Gmv_Entity_Email($this, 'Email',
+            $this->getImportFile('ekir_gmv/email.csv')))->load();
+
+        // websites
+        $this->websites = (new CRM_Gmv_Entity_Website($this, 'Website',
+            $this->getImportFile('ekir_gmv/homepage.csv')))->load();
+
+        $this->log("Contact detail data loaded.");
     }
 
     /**
@@ -220,8 +240,28 @@ class CRM_Gmv_ImportController
     protected function syncContacts()
     {
         $this->individuals->sync();
-        $this->individuals->sync();
 
         // todo
+    }
+
+    /**
+     * Get the identity tracker type fpr the GMV identity type
+     */
+    public function getGmvIdType() {
+        return 'gmz_id';
+    }
+
+    /**
+     * Run a CiviCRM API3 call
+     *
+     * @param $entity string
+     * @param $action string
+     * @param array $parameters
+     * @throws \CiviCRM_API3_Exception API exception
+     */
+    public function api3($entity, $action, $parameters = [])
+    {
+        // anything to do here?
+        return civicrm_api3($entity, $action, $parameters);
     }
 }

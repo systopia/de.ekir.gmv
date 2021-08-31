@@ -1,0 +1,20 @@
+{
+  "_lookup": ["name"],
+  "_translate": ["title"],
+  "name": "remote_contact_roles",
+  "title": "Remote Contact Roles",
+  "is_reserved": "1",
+  "is_active": "1",
+  "_values": [
+    {
+      "_lookup": ["name"],
+      "_translate": ["label"],
+      "name": "remote-user",
+      "label": "CiviRemote User",
+      "description": "Contact has a CiviRemote-ID, or has had them in the past",
+      "filter": "0",
+      "is_reserved": "1",
+      "is_active": "1"
+    }
+  ]
+}
