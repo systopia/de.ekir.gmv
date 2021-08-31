@@ -27,6 +27,24 @@ class CRM_Gmv_Form_GmvZipUpload extends CRM_Core_Form
         $this->setTitle("GMV ZIP Importer");
 
         $this->add(
+            'select',
+            'gmv_xcm_profile_individuals',
+            "Verarbeitungsprofil für Personen (XCM)",
+            CRM_Xcm_Configuration::getProfileList(),
+            ['class' => 'crm-select2 huge'],
+            true
+        );
+
+        $this->add(
+            'select',
+            'gmv_xcm_profile_organisations',
+            "Verarbeitungsprofil für Organisationen (XCM)",
+            CRM_Xcm_Configuration::getProfileList(),
+            ['class' => 'crm-select2 huge'],
+            true
+        );
+
+        $this->add(
             'file',
             'gmv_zip',
             ts('Import Data File'),
@@ -37,6 +55,13 @@ class CRM_Gmv_Form_GmvZipUpload extends CRM_Core_Form
         $max_size = CRM_Utils_Number::formatUnitSize(1024 * 1024 * 8, true);
         $this->setMaxFileSize($max_size);
 
+        // default values:
+        $this->setDefaults([
+            'gmv_xcm_profile_individuals' => Civi::settings()->get('gmv_xcm_profile_individuals'),
+            'gmv_xcm_profile_organisations' => Civi::settings()->get('gmv_xcm_profile_organisations'),
+        ]);
+
+        // add the buttons
         $this->addButtons([
               [
                   'type' => 'submit',
@@ -50,6 +75,11 @@ class CRM_Gmv_Form_GmvZipUpload extends CRM_Core_Form
 
     public function postProcess()
     {
+        // store new settings
+        $values = $this->exportValues();
+        Civi::settings()->set('gmv_xcm_profile_individuals', $values['gmv_xcm_profile_individuals']);
+        Civi::settings()->set('gmv_xcm_profile_organisations', $values['gmv_xcm_profile_organisations']);
+
         $zip_file_data = $this->_submitFiles['gmv_zip'];
         if (!empty($zip_file_data['error']) || empty($zip_file_data['tmp_name'])) {
             CRM_Core_Session::setStatus("Eventuell einmal die PHP file upload Einstellungen prüfen.", "Upload fehlgeschlagen", 'error');

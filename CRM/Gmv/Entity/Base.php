@@ -103,6 +103,9 @@ class CRM_Gmv_Entity_Base
             $records[] = $labeled_record;
         }
         fclose($fd);
+
+        $record_count = count($records);
+        $this->log("{$record_count} records loaded.", 'debug');
         return $records;
     }
 

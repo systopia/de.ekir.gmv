@@ -20,6 +20,18 @@
   <div class="clear"></div>
 </div>
 
+<div class="crm-section">
+  <div class="label">{$form.gmv_xcm_profile_individuals.label}</div>
+  <div class="content">{$form.gmv_xcm_profile_individuals.html}</div>
+  <div class="clear"></div>
+</div>
+
+<div class="crm-section">
+  <div class="label">{$form.gmv_xcm_profile_organisations.label}</div>
+  <div class="content">{$form.gmv_xcm_profile_organisations.html}</div>
+  <div class="clear"></div>
+</div>
+
 <div class="crm-submit-buttons">
 {include file="CRM/common/formButtons.tpl" location="bottom"}
 </div>

@@ -20,11 +20,11 @@
   Schritte für den Import
   <ol>
     <li>Auf dem Server einloggen: <br/><code>ssh civirm@vs1170.mymanaged.host</code></li>
-    <li>Wartungsmodus setzen:<br/><code>nohup cvi drush {$environment} vset maintenance_mode 1</code></li>
+    <li>Wartungsmodus setzen:<br/><code>cvi drush {$environment} vset maintenance_mode 1</code></li>
     <li>Backup machen:<br/><code>cvi backup -c {$environment} GMVImport</code></li>
     <li>Dort eingeben: <br/><code>nohup cvi drush {$environment} cvapi GMV.sync data={$import_id} &</code></li>
     <li>Dann Log verfolgen: <br/><code>tail -f {$full_path}/import.log</code></li>
     <li>Ergebnisse prüfen</code></li>
-    <li>Wartungsmodus aufheben:<br/><code>nohup cvi drush {$environment} vset maintenance_mode 0</code></li>
+    <li>Wartungsmodus aufheben:<br/><code>cvi drush {$environment} vset maintenance_mode 0</code></li>
   </ol>
 </div>

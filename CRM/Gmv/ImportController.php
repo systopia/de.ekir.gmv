@@ -158,6 +158,14 @@ class CRM_Gmv_ImportController
     /** @var CRM_Gmv_Entity_AddressData list address data, not linked to contacts (yet) */
     public $addresses = null;
 
+    /** @var CRM_Gmv_Entity_Entity phone data, not linked to contacts (yet) */
+    public $phones = null;
+
+    /** @var CRM_Gmv_Entity_Entity email data, not linked to contacts (yet) */
+    public $emails = null;
+
+    /** @var CRM_Gmv_Entity_Entity website data, not linked to contacts (yet) */
+    public $websites = null;
 
     /**
      * Run the given import
@@ -216,6 +224,10 @@ class CRM_Gmv_ImportController
         // emails
         $this->emails = (new CRM_Gmv_Entity_Email($this, 'Email',
             $this->getImportFile('ekir_gmv/email.csv')))->load();
+
+        // phones
+        $this->phones = (new CRM_Gmv_Entity_Phone($this, 'Phone',
+              $this->getImportFile('ekir_gmv/phone.csv')))->load();
 
         // websites
         $this->websites = (new CRM_Gmv_Entity_Website($this, 'Website',

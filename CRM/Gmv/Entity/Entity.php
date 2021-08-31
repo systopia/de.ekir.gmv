@@ -242,9 +242,11 @@ class CRM_Gmv_Entity_Entity extends CRM_Gmv_Entity_Base
                         $keys_to_delete[] = $main_key;
                     }
                 }
+                break;
 
             default:
                 $this->log("Filter type '{$type}' not defined!", 'error');
+                break;
         }
 
         // delete the fields
