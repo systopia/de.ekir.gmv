@@ -167,19 +167,25 @@ class CRM_Gmv_ImportController
     /** @var CRM_Gmv_Entity_Entity website data, not linked to contacts (yet) */
     public $websites = null;
 
+    /** @var CRM_Gmv_Entity_Individual contact data */
+    public $individuals = null;
+
+    /** @var CRM_Gmv_Entity_Individual contact data prepped for XCM */
+    public $individuals_xcm = null;
+
     /**
      * Run the given import
      */
     public function run()
     {
-        $this->log("Starting GMZ importer on: " . $this->getFolder());
+        $this->log("Starting GMV importer on: " . $this->getFolder());
         $this->syncDataStructures();
         $this->loadLists();
         $this->loadContactDetails();
+        //        $this->loadOrganisations();
+        //        $this->syncOrganisations();
         $this->loadContacts();
         $this->syncContacts();
-//        $this->loadOrganisations();
-//        $this->syncOrganisations();
     }
 
 
@@ -241,8 +247,12 @@ class CRM_Gmv_ImportController
      */
     protected function loadContacts()
     {
+        $this->individuals_xcm = (new CRM_Gmv_Entity_Individual($this,
+            $this->getImportFile('ekir_gmv/person.csv')))->load()->convertToXcmDataSet();
+
         $this->individuals = (new CRM_Gmv_Entity_Individual($this,
             $this->getImportFile('ekir_gmv/person.csv')))->load();
+
         $this->log("Contact data loaded.");
     }
 
@@ -251,7 +261,39 @@ class CRM_Gmv_ImportController
      */
     protected function syncContacts()
     {
-        $this->individuals->sync();
+        // FIRST: run through XCM (for change notifications)
+        $this->log("Starting XCM synchronisation", 'info');
+        $xcm_profile = Civi::settings()->get('gmv_xcm_profile_individuals');
+        foreach ($this->individuals_xcm->getAllRecords() as $record) {
+            // first: find contact by gmv_id
+            $existing_contact_id = $this->getGmvContactId($record['gmv_id']);
+            if ($existing_contact_id) {
+                $record['id'] = $existing_contact_id;
+                $this->log("GMV Contact 'GMV-{$record['gmv_id']}' by ID-Tracker: {$existing_contact_id}");
+            } else {
+                unset($record['id']); // just to be safe
+            }
+
+            // run XCM
+            $record['xcm_profile'] = $xcm_profile;
+            $record['location_type_id'] = 2; // work
+            try {
+                $xcm_result = $this->api3('Contact', 'getorcreate', $record);
+                $this->log("GMV Contact 'GMV-{$record['gmv_id']}' passed through XCM");
+                $contact_id = $xcm_result['id'];
+                if (!$existing_contact_id) {
+                    $this->setGmvContactID($contact_id, $record['gmv_id']);
+                }
+            } catch (CiviCRM_API3_Exception $ex) {
+                $this->log("XCM FAILED: " . $ex->getMessage(), 'error');
+            }
+        }
+
+        // then run the rest
+        $this->log("Starting detail synchronisation", 'info');
+        foreach ($this->individuals->getAllRecords() as $record) {
+            // todo: what to do?
+        }
 
         // todo
     }
@@ -260,7 +302,39 @@ class CRM_Gmv_ImportController
      * Get the identity tracker type fpr the GMV identity type
      */
     public function getGmvIdType() {
-        return 'gmz_id';
+        return 'gmv_id';
+    }
+
+    /**
+     * Get a contact_id of the contact with the given GMV-ID
+     *
+     * @param $gmv_id
+     */
+    public function getGmvContactId($gmv_id) {
+        $gmv_id = 'GMV-' . $gmv_id;
+        $result = $this->api3('Contact', 'findbyidentity', [
+            'identifier' => $gmv_id,
+            'identifier_type' => $this->getGmvIdType(),
+        ]);
+        if (isset($result['id'])) {
+            return $result['id'];
+        } else {
+            return null;
+        }
+    }
+
+    /**
+     * Get a contact_id of the contact with the given GMV-ID
+     *
+     * @param $gmv_id
+     */
+    public function setGmvContactId($contact_id, $gmv_id) {
+        $gmv_id = 'GMV-' . $gmv_id;
+        $this->api3('Contact', 'addidentity', [
+            'contact_id' => $contact_id,
+            'identifier' => $gmv_id,
+            'identifier_type' => $this->getGmvIdType(),
+        ]);
     }
 
     /**

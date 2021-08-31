@@ -50,7 +50,7 @@ class CRM_Gmv_Upgrader extends CRM_Gmv_Upgrader_Base
             'getcount',
             [
                 'option_group_id' => 'contact_id_history_type',
-                'value' => 'gmz_id',
+                'value' => 'gmv_id',
             ]
         );
         switch ($exists_count) {
@@ -77,7 +77,7 @@ class CRM_Gmv_Upgrader extends CRM_Gmv_Upgrader_Base
             default:
                 // more than one exists: that's not good!
                 CRM_Core_Session::setStatus(
-                    "Es gibt bereits mehrere ID Typen mit type 'gmz_id', das dürfte Probleme bereiten.",
+                    "Es gibt bereits mehrere ID Typen mit type 'gmv_id', das dürfte Probleme bereiten.",
                     E::ts("Warning"),
                     'warn'
                 );

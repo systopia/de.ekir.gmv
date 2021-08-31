@@ -67,7 +67,7 @@ class CRM_Gmv_Entity_Individual extends CRM_Gmv_Entity_Contact
         if (!$this->entity_data) {
             $this->entity_data = $this->getRawData(array_keys($this->data_mapping));
             $this->renameKeys($this->data_mapping);
-            $this->setEntityValue('contact_type', 'Individual');
+            $this->setEntityValues('contact_type', 'Individual');
             $this->copyEntityValue('gender_id', 'individual_prefix');
 
             // do some lookups
@@ -75,12 +75,35 @@ class CRM_Gmv_Entity_Individual extends CRM_Gmv_Entity_Contact
             $this->mapEntityListValues('formal_title', $this->controller->salutations);
             $this->mapEntityValues('gender_id', $this->gender_map);
             $this->mapEntityValues('individual_prefix', $this->prefix_map);
+        }
 
-            // add main address (for xcm)
-            $this->joinData($this->controller->addresses, 'id', 'address_data_link');
+        return $this;
+    }
 
-            // add main email (for xcm)
+    /**
+     * "Mangle" the data to be an xcm data set
+     */
+    public function convertToXcmDataSet()
+    {
+        // add main address (for xcm)
+        $this->joinData($this->controller->addresses, 'gmv_id', 'contact_id');
+        $this->dropEntityAttribute('contact_address_id');
 
+        // add main email (for xcm)
+        $this->joinData($this->controller->emails, 'gmv_id', 'contact_id');
+        $this->dropEntityAttribute('address_id');
+
+        // iterate phones and add up to two to the contact
+        $this->indexBy('gmv_id');
+        foreach ($this->controller->phones->entity_data as $phone) {
+            $contact_copy = $this->getDataRecord($phone['contact_id'], 'gmv_id');
+            if ($contact_copy) {
+                if (!isset($contact_copy['phone'])) {
+                    $this->setEntityValue('gmv_id', $contact_copy['gmv_id'], 'phone', $phone['phone']);
+                } else if (!isset($contact_copy['phone2'])) {
+                    $this->setEntityValue('gmv_id', $contact_copy['gmv_id'], 'phone2', $phone['phone']);
+                }
+            }
         }
 
         return $this;

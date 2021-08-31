@@ -1,7 +1,7 @@
 <?xml version="1.0"?>
 <extension key="de.ekir.gmv" type="module">
   <file>gmv</file>
-  <name>GMZ and OrgDB Synchronisation</name>
+  <name>GMV and OrgDB Synchronisation</name>
   <description>This is currently only a zip file-based importer</description>
   <license>AGPL-3.0</license>
   <maintainer>

@@ -45,6 +45,16 @@ class CRM_Gmv_Entity_Entity extends CRM_Gmv_Entity_Base
     ];
 
     /**
+     * Get an array with all records
+     *
+     * @return array
+     */
+    public function getAllRecords()
+    {
+        return $this->entity_data;
+    }
+
+    /**
      * Rename the keys in the entity data
      *
      * @param $key_mapping array old -> new key mapping
@@ -88,10 +98,30 @@ class CRM_Gmv_Entity_Entity extends CRM_Gmv_Entity_Base
      * @param string $key
      * @param string $value
      */
-    public function setEntityValue($key, $value)
+    public function setEntityValues($key, $value)
     {
         foreach ($this->entity_data as &$entity) {
             $entity[$key] = $value;
+        }
+    }
+
+    /**
+     * Set the following property to the given key for a entity with the given key
+     *
+     * @param string $entity_key_name  the key field name, e.g. 'id'
+     * @param string $entity_key       the value to identify the entity
+     * @param string $field            the field name to set in the entity
+     * @param string $value            the value to set it to
+     */
+    public function setEntityValue($entity_key_name, $entity_key, $field, $value)
+    {
+        // make sure it's indexed
+        $this->indexBy($entity_key_name);
+
+        // find the entity
+        if (isset($this->indexed_entity_data[$entity_key_name][$entity_key])) {
+            // it exists!
+            $this->indexed_entity_data[$entity_key_name][$entity_key][$field] = $value;
         }
     }
 
@@ -185,14 +215,14 @@ class CRM_Gmv_Entity_Entity extends CRM_Gmv_Entity_Base
             if (!empty($entity[$my_key])) {
                 $key_value = $entity[$my_key];
                 $record = $other_data->getDataRecord($key_value, $other_key);
-                if ($fields) {
-                    // set (override) the given fields
-                    foreach ($fields as $field) {
-                        $entity[$field] = CRM_Utils_Array::value($field, $record);
-                    }
-                } else {
-                    // add given data (only if not already present)
-                    if ($record) {
+                if ($record) {
+                    if ($fields) {
+                        // set (override) the given fields
+                        foreach ($fields as $field) {
+                            $entity[$field] = CRM_Utils_Array::value($field, $record);
+                        }
+                    } else {
+                        // add given data (only if not already present)
                         foreach ($record as $field => $value) {
                             if (!array_key_exists($field, $entity)) {
                                 $entity[$field] = $value;
