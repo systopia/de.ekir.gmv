@@ -182,8 +182,8 @@ class CRM_Gmv_ImportController
         $this->syncDataStructures();
         $this->loadLists();
         $this->loadContactDetails();
-        //        $this->loadOrganisations();
-        //        $this->syncOrganisations();
+        $this->loadOrganisations();
+        $this->syncOrganisations();
         $this->loadContacts();
         $this->syncContacts();
     }
@@ -241,6 +241,18 @@ class CRM_Gmv_ImportController
 
         $this->log("Contact detail data loaded.");
     }
+
+    /**
+     * Apply the option groups
+     */
+    protected function loadOrganisations()
+    {
+        $this->individuals = (new CRM_Gmv_Entity_Organization($this,
+            $this->getImportFile('ekir_gmv/organization.csv')))->load();
+
+        $this->log("Organization data loaded.");
+    }
+
 
     /**
      * Apply the option groups
