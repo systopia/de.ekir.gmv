@@ -20,10 +20,14 @@ use CRM_Gmv_ExtensionUtil as E;
  */
 class CRM_Gmv_Entity_Organization extends CRM_Gmv_Entity_Contact
 {
+    /** @var string identifier marking EKIR itself */
+    protected $EKIR_SELF_ID = 'A1';
+
     /** @var string[] raw column name to field name */
     protected $data_mapping = [
         // used
         'id' => 'gmv_id',
+        'historical' => '_historic',
         'parent_id' => 'gmv_data.gmv_data_master_id',
         'designation' => 'organization_name',
         'additions' => 'note',
@@ -32,8 +36,8 @@ class CRM_Gmv_Entity_Organization extends CRM_Gmv_Entity_Contact
         'catechism' => 'gmv_data.gmv_data_catechism',
         'government_district' => 'gmv_data.gmv_data_government_district',
         'religious_community' => 'gmv_data.gmv_data_religious_community',
-        //'identifier' => 'gmv_data.gmv_data_identifier',
-        'identifier' => 'external_identifier',
+        'identifier' => 'gmv_data.gmv_data_identifier',
+//        'identifier' => 'external_identifier',
         'members' => 'gmv_data.gmv_member_count',
     ];
 
@@ -53,44 +57,47 @@ class CRM_Gmv_Entity_Organization extends CRM_Gmv_Entity_Contact
         if (!$this->entity_data) {
             $this->entity_data = $this->getRawData(array_keys($this->data_mapping));
             $this->renameKeys($this->data_mapping);
-            $this->setEntityValues('contact_type', 'Individual');
-            $this->copyEntityValue('gender_id', 'individual_prefix');
 
-            // do some lookups
-            $this->mapEntityListValues('job_title', $this->controller->occupations);
-            $this->mapEntityListValues('formal_title', $this->controller->salutations);
-            $this->mapEntityValues('gender_id', $this->gender_map);
-            $this->mapEntityValues('individual_prefix', $this->prefix_map);
-        }
+            // custom adjustments
+            foreach ($this->entity_data as &$entity_datum) {
+                // truncate 'organization_name' to 128
+                if (strlen($entity_datum['organization_name']) > 128) {
+                    $this->log("Organisation name {$entity_datum['organization_name']} too long, will be truncated to 128 characters", 'warning');
+                    $entity_datum['organization_name'] = substr($entity_datum['organization_name'], 0, 128);
+                }
 
-        return $this;
-    }
-
-    /**
-     * "Mangle" the data to be an xcm data set
-     */
-    public function convertToXcmDataSet()
-    {
-        // add main address (for xcm)
-        $this->joinData($this->controller->addresses, 'gmv_id', 'contact_id');
-        $this->dropEntityAttribute('contact_address_id');
-
-        // add main email (for xcm)
-        $this->joinData($this->controller->emails, 'gmv_id', 'contact_id');
-        $this->dropEntityAttribute('address_id');
-
-        // iterate phones and add up to two to the contact
-        $this->indexBy('gmv_id');
-        foreach ($this->controller->phones->entity_data as $phone) {
-            $contact_copy = $this->getDataRecord($phone['contact_id'], 'gmv_id');
-            if ($contact_copy) {
-                if (!isset($contact_copy['phone'])) {
-                    $this->setEntityValue('gmv_id', $contact_copy['gmv_id'], 'phone', $phone['phone']);
-                } else if (!isset($contact_copy['phone2'])) {
-                    $this->setEntityValue('gmv_id', $contact_copy['gmv_id'], 'phone2', $phone['phone']);
+                // derive contact_type and subtype
+                $entity_datum['contact_type'] = 'Organization';
+                if ($entity_datum['gmv_data.gmv_data_identifier'] == $this->EKIR_SELF_ID) {
+                    // this is EKIR itself, there's some special stuff
+                    $entity_datum['gmv_data.gmv_data_master_id'] = '';
+                    $entity_datum['contact_sub_type'] = '';
+                } else {
+                    // this is *any* other entry:
+                    // todo: is there a better way?
+                    switch (strlen($entity_datum['gmv_data.gmv_data_identifier'])) {
+                        case 6:
+                            $entity_datum['contact_sub_type'] = 'Kirchenkreis';
+                            break;
+                        case 8:
+                            $entity_datum['contact_sub_type'] = 'Kirchengemeinde';
+                            break;
+                        case 10:
+                        default:
+                            $entity_datum['contact_sub_type'] = 'Kirchenstelle';
+                            break;
+//                        default:
+//                            $this->log("ID '{$entity_datum['external_identifier']}' is ill-formatted.");
+//                            $entity_datum['contact_sub_type'] = '';
+//                            break;
+                        }
                 }
             }
         }
+
+        // only keep 'historic=t' values
+        $this->filterEntityData('_historic', 'equals', 'f');
+        $this->dropEntityAttribute('_historic');
 
         return $this;
     }

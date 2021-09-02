@@ -25,6 +25,12 @@ class CRM_Gmv_ImportController
     /** @var string folder to work on */
     protected $folder = null;
 
+    /** @var array record all changes (except for newly created contacts) */
+    protected $recorded_changes = [];
+
+    /** @var array caches gmz values */
+    protected $gmv_id_cache = [];
+
     /**
      * Create a new ImportController
      *
@@ -178,14 +184,19 @@ class CRM_Gmv_ImportController
      */
     public function run()
     {
+        $this->fillGmvIdCache();
         $this->log("Starting GMV importer on: " . $this->getFolder());
         $this->syncDataStructures();
         $this->loadLists();
         $this->loadContactDetails();
-        $this->loadOrganisations();
-        $this->syncOrganisations();
+//        $this->loadOrganisations();
+//        $this->syncOrganisations();
         $this->loadContacts();
         $this->syncContacts();
+//        $this->syncEmails();
+//        $this->syncPhones();
+//        $this->syncAddresses();
+//        $this->generateChangeActivities();
     }
 
 
@@ -247,7 +258,7 @@ class CRM_Gmv_ImportController
      */
     protected function loadOrganisations()
     {
-        $this->individuals = (new CRM_Gmv_Entity_Organization($this,
+        $this->organisations = (new CRM_Gmv_Entity_Organization($this,
             $this->getImportFile('ekir_gmv/organization.csv')))->load();
 
         $this->log("Organization data loaded.");
@@ -271,6 +282,88 @@ class CRM_Gmv_ImportController
     /**
      * Apply the option groups
      */
+    protected function syncOrganisations()
+    {
+        // todo: organisations deleted?
+
+        // update/create organisation data
+        $newly_created_contacts = [];
+        $counter = 0;
+        $created_counter = 0;
+        $record_count = $this->organisations->getRecordCount();
+        $this->log("Starting organisation synchronisation of {$record_count} records...", 'info');
+        foreach ($this->organisations->getAllRecords() as $record) {
+            // links to other organisations will be synced below
+            unset($record['gmv_data.gmv_data_master_id']);
+
+            // sync with civicrm: first: does the contact already exist?
+            $existing_contact_id = $this->getGmvContactId($record['gmv_id']);
+            if ($existing_contact_id) {
+                // contact exists, check if update is necessary
+                $this->updateContact($existing_contact_id, $record);
+            } else {
+                try {
+                    // prepare
+                    CRM_Gmv_CustomData::resolveCustomFields($record);
+                    $create_result = $this->api3('Contact', 'create', $record);
+                    $contact_id = $create_result['id'];
+                    $newly_created_contacts[$contact_id] = $create_result;
+                    $this->setGmvContactID($contact_id, $record['gmv_id']);
+                } catch (CiviCRM_API3_Exception $ex) {
+                    $this->log("Organisation creation failed [{$record['gmv_id']}]: " . $ex->getMessage(), 'error');
+                }
+            }
+
+            // progress logging
+            $counter++;
+            if (!($counter % 100)) {
+                $this->log("{$counter} organisations synchronised...");
+            }
+        }
+        $this->log("all organisations synchronised.");
+
+        // add contact links
+        $counter = 0;
+        $link_field_key = CRM_Gmv_CustomData::getCustomFieldKey('gmv_data','gmv_data_master_id');
+        foreach ($this->organisations->getAllRecords() as $record) {
+            if (empty($record['gmv_data.gmv_data_master_id'])) continue; // nothing to do here
+
+            // links to other organisations will be synced below
+            $contact_id = $this->getGmvContactId($record['gmv_id']);
+            $parent_id = $this->getGmvContactId($record['gmv_data.gmv_data_master_id']);
+            if (!$contact_id || !$parent_id) {
+                $this->log("Either GMV-{$record['gmv_id']} or GMV-{$record['gmv_data.gmv_data_master_id']} do not exist", 'error');
+            }
+
+            // newly created contacts don't need an upgrade
+            $contact_newly_created = isset($newly_created_contacts[$contact_id]);
+            if ($contact_newly_created) {
+                // just set the ID
+                $this->api3('Contact', 'create', ['id' => $contact_id, $link_field_key => $parent_id]);
+            } else {
+                // we have to check the current value
+                $current_parent_id = (string) $this->api3('Contact', 'getvalue', [
+                    'id' => $contact_id, 'return' => $link_field_key]);
+                if ($current_parent_id != $parent_id) {
+                    $this->api3('Contact', 'create', ['id' => $contact_id, $link_field_key => $parent_id]);
+                    $this->recordChange($contact_id, 'gmv_data.gmv_data_master_id', $current_parent_id, $parent_id);
+                }
+            }
+
+            // progress logging
+            $counter++;
+            if (!($counter % 100)) {
+                $this->log("{$counter} organisations linked...");
+            }
+        }
+        $this->log("all organisations linked...");
+
+        // todo: deleted contacts?
+    }
+
+    /**
+     * Apply the option groups
+     */
     protected function syncContacts()
     {
         // FIRST: run through XCM (for change notifications)
@@ -281,7 +374,7 @@ class CRM_Gmv_ImportController
             $existing_contact_id = $this->getGmvContactId($record['gmv_id']);
             if ($existing_contact_id) {
                 $record['id'] = $existing_contact_id;
-                $this->log("GMV Contact 'GMV-{$record['gmv_id']}' by ID-Tracker: {$existing_contact_id}");
+                $this->log("GMV Contact 'GMV-{$record['gmv_id']}' by ID-Tracker: {$existing_contact_id}", 'debug');
             } else {
                 unset($record['id']); // just to be safe
             }
@@ -291,7 +384,7 @@ class CRM_Gmv_ImportController
             $record['location_type_id'] = 2; // work
             try {
                 $xcm_result = $this->api3('Contact', 'getorcreate', $record);
-                $this->log("GMV Contact 'GMV-{$record['gmv_id']}' passed through XCM");
+                $this->log("GMV Contact 'GMV-{$record['gmv_id']}' passed through XCM", 'debug');
                 $contact_id = $xcm_result['id'];
                 if (!$existing_contact_id) {
                     $this->setGmvContactID($contact_id, $record['gmv_id']);
@@ -304,10 +397,61 @@ class CRM_Gmv_ImportController
         // then run the rest
         $this->log("Starting detail synchronisation", 'info');
         foreach ($this->individuals->getAllRecords() as $record) {
-            // todo: what to do?
+            $existing_contact_id = $this->getGmvContactId($record['gmv_id']);
+            if ($existing_contact_id) {
+                // contact exists, check if update is necessary
+                $this->updateContact($existing_contact_id, $record);
+            } else {
+                try {
+                    $create_result = $this->api3('Contact', 'create', $record);
+                    $contact_id = $create_result['id'];
+                    $this->setGmvContactID($contact_id, $record['gmv_id']);
+                } catch (CiviCRM_API3_Exception $ex) {
+                    $this->log("Individual creation failed [{$record['gmv_id']}]: " . $ex->getMessage(), 'error');
+                }
+            }
+        }
+    }
+
+    /**
+     * Record changes so we can later generate the change activities
+     *
+     * @param $contact_id integer
+     * @param $attribute string
+     * @param $old_value string
+     * @param $new_value string
+     */
+    protected function recordChange($contact_id, $attribute, $old_value, $new_value)
+    {
+        // some exceptions:
+        if ($new_value === '0' && $old_value === null) {
+            return;
+        }
+        $this->recorded_changes[$contact_id][$attribute] = [$old_value, $new_value];
+    }
+
+    /**
+     * Will update the given contact data
+     * @param $contact_id integer already identified contact id
+     * @param $contact_data array contact data to be added
+     */
+    public function updateContact($contact_id, $contact_data)
+    {
+        unset($contact_data['gmv_id']);
+        $current_contact_data = $this->api3('Contact', 'getsingle', ['id' => $contact_id]);
+        $contact_update = [];
+        foreach ($contact_data as $field_name => $requested_value) {
+            $current_value = CRM_Utils_Array::value($field_name, $current_contact_data);
+            if ($current_value != $requested_value) {
+                $this->recordChange($contact_id, $field_name, $current_value, $requested_value);
+                $contact_update[$field_name] = $requested_value;
+            }
         }
 
-        // todo
+        if (!empty($contact_update)) {
+            $contact_update['id'] = $contact_id;
+            $this->api3('Contact', 'create', $contact_update);
+        }
     }
 
     /**
@@ -317,18 +461,40 @@ class CRM_Gmv_ImportController
         return 'gmv_id';
     }
 
+    /** will fill the gmv id cache */
+    public function fillGmvIdCache() {
+        $query = CRM_Core_DAO::executeQuery("
+            SELECT 
+             entity_id  AS contact_id, 
+             identifier AS gmv_id
+            FROM civicrm_value_contact_id_history 
+            WHERE identifier_type='gmv_id';
+        ");
+        while ($query->fetch()) {
+            $gmv_id = substr($query->gmv_id, 4);
+            $this->gmv_id_cache[$gmv_id] = $query->contact_id;
+        }
+        $cache_size = count($this->gmv_id_cache);
+        $this->log("Filled GMV-ID cache with {$cache_size} entries.");
+    }
+
     /**
      * Get a contact_id of the contact with the given GMV-ID
      *
      * @param $gmv_id
      */
     public function getGmvContactId($gmv_id) {
+        if (isset($this->gmv_id_cache[$gmv_id])) {
+            return $this->gmv_id_cache[$gmv_id];
+        }
+
         $gmv_id = 'GMV-' . $gmv_id;
         $result = $this->api3('Contact', 'findbyidentity', [
             'identifier' => $gmv_id,
             'identifier_type' => $this->getGmvIdType(),
         ]);
         if (isset($result['id'])) {
+            $this->gmv_id_cache[$gmv_id] = $result['id'];
             return $result['id'];
         } else {
             return null;
@@ -347,6 +513,7 @@ class CRM_Gmv_ImportController
             'identifier' => $gmv_id,
             'identifier_type' => $this->getGmvIdType(),
         ]);
+        $this->gmv_id_cache[$gmv_id] = $contact_id;
     }
 
     /**

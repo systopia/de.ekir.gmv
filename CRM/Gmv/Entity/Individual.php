@@ -24,6 +24,7 @@ class CRM_Gmv_Entity_Individual extends CRM_Gmv_Entity_Contact
     protected $data_mapping = [
         // used
         'id' => 'gmv_id',
+        'historical' => '_historic',
         'firstname' => 'first_name',
         'lastname' => 'last_name',
         'birthdate' => 'birth_date',
@@ -75,6 +76,10 @@ class CRM_Gmv_Entity_Individual extends CRM_Gmv_Entity_Contact
             $this->mapEntityListValues('formal_title', $this->controller->salutations);
             $this->mapEntityValues('gender_id', $this->gender_map);
             $this->mapEntityValues('individual_prefix', $this->prefix_map);
+
+            // only keep 'historic=t' values
+            $this->filterEntityData('_historic', 'equals', 'f');
+            $this->dropEntityAttribute('_historic');
         }
 
         return $this;

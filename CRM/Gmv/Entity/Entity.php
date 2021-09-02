@@ -27,7 +27,7 @@ class CRM_Gmv_Entity_Entity extends CRM_Gmv_Entity_Base
     protected $entity_data = null;
 
     /** @var array adds an indexed access layer to the entity_data */
-    protected $indexed_entity_data = null;
+    protected $indexed_entity_data = [];
 
     public function __construct($controller, $entity, $file)
     {
@@ -52,6 +52,16 @@ class CRM_Gmv_Entity_Entity extends CRM_Gmv_Entity_Base
     public function getAllRecords()
     {
         return $this->entity_data;
+    }
+
+    /**
+     * Get the number of records
+     *
+     * @return int
+     */
+    public function getRecordCount()
+    {
+        return count($this->entity_data);
     }
 
     /**
@@ -269,6 +279,15 @@ class CRM_Gmv_Entity_Entity extends CRM_Gmv_Entity_Base
             case 'not_empty':
                 foreach ($this->entity_data as $main_key => &$entity_datum) {
                     if (empty($entity_datum[$field])) {
+                        $keys_to_delete[] = $main_key;
+                    }
+                }
+                break;
+
+            case 'equals':
+                foreach ($this->entity_data as $main_key => &$entity_datum) {
+                    $record_value = CRM_Utils_Array::value($field, $entity_datum);
+                    if ($record_value !== $value) {
                         $keys_to_delete[] = $main_key;
                     }
                 }

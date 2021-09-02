@@ -12,17 +12,32 @@
   "collapse_display": "0",
   "is_active": "1",
   "is_multiple": "0",
-  "style": "Tab",
+  "style": "Inline",
   "table_name": "civicrm_value_gmv_data",
   "collapse_adv_display": "0",
   "is_reserved": "0",
   "_fields": [
     {
+      "_lookup": ["column_name"],
+      "_translate": ["label"],
+      "name": "gmv_data_identifier",
+      "column_name": "identifier",
+      "label": "EKIR ID",
+      "data_type": "String",
+      "html_type": "Text",
+      "is_required": "0",
+      "is_searchable": "1",
+      "is_search_range": "1",
+      "is_active": "1",
+      "is_view": "0",
+      "in_selector": "1"
+    },
+    {
       "_lookup": ["column_name", "custom_group_id"],
       "_translate": ["label"],
       "name": "gmv_data_master_id",
       "column_name": "master_id",
-      "label": "Gehört Zu",
+      "label": "Gehört zu",
       "data_type": "ContactReference",
       "html_type": "Autocomplete-Select",
       "is_required": "0",
@@ -30,7 +45,7 @@
       "is_search_range": "0",
       "is_active": "1",
       "is_view": "0",
-      "filter": "action=get&contact_sub_type=Kirchenkreis,Kirchengemeinde",
+      "filter": "action=get&contact_type=Organization",
       "in_selector": "1"
     },
     {
@@ -128,7 +143,7 @@
       "is_required": "0",
       "is_searchable": "1",
       "is_search_range": "0",
-      "is_active": "0",
+      "is_active": "1",
       "is_view": "0",
       "in_selector": "0"
     },
