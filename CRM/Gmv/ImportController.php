@@ -191,22 +191,218 @@ class CRM_Gmv_ImportController
         $this->loadContactDetails();
 //        $this->loadOrganisations();
 //        $this->syncOrganisations();
-        $this->loadContacts();
-        $this->syncContacts();
-//        $this->syncEmails();
+//        $this->loadContacts();
+//        $this->syncContacts();
+        $this->syncEmails();
 //        $this->syncPhones();
 //        $this->syncAddresses();
-//        $this->generateChangeActivities();
+        $this->generateChangeActivities();
     }
 
+
+    /*****************************************************************
+     *                 HELPER / INFRASTRUCTURE                      **
+     *****************************************************************/
+
+    /**
+     * Record changes so we can later generate the change activities
+     *
+     * @param $contact_id integer
+     * @param $attribute string
+     * @param $old_value string
+     * @param $new_value string
+     */
+    protected function recordChange($contact_id, $attribute, $old_value, $new_value)
+    {
+        // some exceptions:
+        if ($new_value === '0' && $old_value === null) {
+            return;
+        }
+        $this->recorded_changes[$contact_id][$attribute] = [$old_value, $new_value];
+    }
+
+    /**
+     * Will update the given contact data
+     * @param $contact_id integer already identified contact id
+     * @param $contact_data array contact data to be added
+     */
+    public function updateContact($contact_id, $contact_data)
+    {
+        unset($contact_data['gmv_id']);
+        $current_contact_data = $this->api3('Contact', 'getsingle', ['id' => $contact_id]);
+        $contact_update = [];
+        foreach ($contact_data as $field_name => $requested_value) {
+            $current_value = CRM_Utils_Array::value($field_name, $current_contact_data);
+            if ($current_value != $requested_value) {
+                $this->recordChange($contact_id, $field_name, $current_value, $requested_value);
+                $contact_update[$field_name] = $requested_value;
+            }
+        }
+
+        if (!empty($contact_update)) {
+            $contact_update['id'] = $contact_id;
+            $this->api3('Contact', 'create', $contact_update);
+        }
+    }
+
+    /**
+     * Get the identity tracker type fpr the GMV identity type
+     */
+    public function getGmvIdType() {
+        return 'gmv_id';
+    }
+
+    /** will fill the gmv id cache */
+    public function fillGmvIdCache() {
+        $query = CRM_Core_DAO::executeQuery("
+            SELECT 
+             entity_id  AS contact_id, 
+             identifier AS gmv_id
+            FROM civicrm_value_contact_id_history 
+            WHERE identifier_type='gmv_id';
+        ");
+        while ($query->fetch()) {
+            $gmv_id = substr($query->gmv_id, 4);
+            $this->gmv_id_cache[$gmv_id] = $query->contact_id;
+        }
+        $cache_size = count($this->gmv_id_cache);
+        $this->log("Filled GMV-ID cache with {$cache_size} entries.");
+    }
+
+    /**
+     * Get a contact_id of the contact with the given GMV-ID
+     *
+     * @param $gmv_id
+     */
+    public function getGmvContactId($gmv_id) {
+        if (isset($this->gmv_id_cache[$gmv_id])) {
+            return $this->gmv_id_cache[$gmv_id];
+        }
+
+        $gmv_id = 'GMV-' . $gmv_id;
+        $result = $this->api3('Contact', 'findbyidentity', [
+            'identifier' => $gmv_id,
+            'identifier_type' => $this->getGmvIdType(),
+        ]);
+        if (isset($result['id'])) {
+            $this->gmv_id_cache[$gmv_id] = $result['id'];
+            return $result['id'];
+        } else {
+            return null;
+        }
+    }
+
+    /**
+     * Get a contact_id of the contact with the given GMV-ID
+     *
+     * @param $gmv_id
+     */
+    public function setGmvContactId($contact_id, $gmv_id) {
+        $gmv_id = 'GMV-' . $gmv_id;
+        $this->api3('Contact', 'addidentity', [
+            'contact_id' => $contact_id,
+            'identifier' => $gmv_id,
+            'identifier_type' => $this->getGmvIdType(),
+        ]);
+        $this->gmv_id_cache[$gmv_id] = $contact_id;
+    }
+
+    /**
+     * Run a CiviCRM API3 call
+     *
+     * @param $entity string
+     * @param $action string
+     * @param array $parameters
+     * @throws \CiviCRM_API3_Exception API exception
+     */
+    public function api3($entity, $action, $parameters = [])
+    {
+        // anything to do here?
+        return civicrm_api3($entity, $action, $parameters);
+    }
+
+    /**
+     * Generate a diff of the existing to the desired entity
+     * @param $desired_entity array data
+     * @param $existing_entity array data
+     * @param $attributes array of attributes to consider
+     * @param $strip_attributes array attributes to strip from the result
+     */
+    protected function diff($desired_entity, $existing_entity, $attributes, $strip_attributes = [], $case_sensitive = true)
+    {
+        // first, find out if the entities are different
+        $diff = [];
+        foreach ($attributes as $attribute) {
+            $desired_value = $desired_entity[$attribute] ?? null;
+            $existing_value = $existing_entity[$attribute] ?? null;
+            if ($case_sensitive) {
+                if ($desired_value != $existing_value) {
+                    $diff[$attribute] = $desired_value;
+                }
+            } else {
+                if (strtolower($desired_value) != strtolower($existing_value)) {
+                    $diff[$attribute] = $desired_value;
+                }
+            }
+        }
+
+        foreach ($strip_attributes as $strip_attribute) {
+            unset($diff[$strip_attribute]);
+        }
+
+        return $diff;
+    }
+
+    /**
+     * @param $options array list of options offered (as arrays)
+     * @param $search array template data to look for
+     * @param $attributes array list of attributes to take into account
+     * @return array|null option from the options array that matches
+     */
+    protected function extractCurrentDetail($options, $search, $attributes) {
+        foreach ($options as $option) {
+            // accept the option, if all attributes match
+            foreach ($attributes as $attribute) {
+                $requested_value = $search[$attribute] ?? null;
+                $option_value = $option[$attribute] ?? null;
+                if ($requested_value != $option_value) {
+                    continue 2;
+                }
+            }
+            // seems to be fine
+            return $option;
+        }
+        return null;
+    }
+
+
+    /**
+     * Get a set of labels of for the given fields
+     *
+     * @param array $field_set
+     *   list of field names (internal)
+     *
+     * @return array  field_name => field_label mapping
+     */
+    public function getFieldLabels($field_set, $xcm_config) {
+        // todo: caching/customfields
+        return CRM_Xcm_Tools::getFieldLabels($field_set, $xcm_config);
+    }
+
+
+    /*****************************************************************
+     *                  LOADING DATA                                **
+     *****************************************************************/
 
     /**
      * Synchronise the data structures with the custom data helper
      */
     protected function syncDataStructures()
     {
-        $this->log("Syncing XXX");
-        // todo
+        $this->log("Syncing data structures");
+        $customData = new CRM_Gmv_CustomData(E::LONG_NAME);
+        $customData->syncOptionGroup(E::path('resources/option_group_catechism.json'));
+        $customData->syncCustomGroup(E::path('resources/custom_group_ekir_organisation.json'));
     }
 
     /**
@@ -219,12 +415,12 @@ class CRM_Gmv_ImportController
             'id', 'designation'))->load();
 
         $this->occupations = (new CRM_Gmv_Entity_List($this,
-            $this->getImportFile('ekir_gmv/occupation.csv'),
-           'id', 'designation'))->load();
+              $this->getImportFile('ekir_gmv/occupation.csv'),
+              'id', 'designation'))->load();
 
         $this->departments = (new CRM_Gmv_Entity_List($this,
-            $this->getImportFile('ekir_gmv/department_designation.csv'),
-            'id', 'designation'))->load();
+              $this->getImportFile('ekir_gmv/department_designation.csv'),
+              'id', 'designation'))->load();
     }
 
     /**
@@ -234,21 +430,21 @@ class CRM_Gmv_ImportController
     {
         // addresses
         $this->address_data = (new CRM_Gmv_Entity_AddressData($this, 'Address',
-            $this->getImportFile('ekir_gmv/address.csv')))->load();
+                  $this->getImportFile('ekir_gmv/address.csv')))->load();
         $this->addresses = (new CRM_Gmv_Entity_Address($this, 'Address',
-          $this->getImportFile('ekir_gmv/addresses.csv')))->load();
+                  $this->getImportFile('ekir_gmv/addresses.csv')))->load();
 
         // emails
         $this->emails = (new CRM_Gmv_Entity_Email($this, 'Email',
-            $this->getImportFile('ekir_gmv/email.csv')))->load();
+                 $this->getImportFile('ekir_gmv/email.csv')))->load();
 
         // phones
         $this->phones = (new CRM_Gmv_Entity_Phone($this, 'Phone',
-              $this->getImportFile('ekir_gmv/phone.csv')))->load();
+               $this->getImportFile('ekir_gmv/phone.csv')))->load();
 
         // websites
         $this->websites = (new CRM_Gmv_Entity_Website($this, 'Website',
-            $this->getImportFile('ekir_gmv/homepage.csv')))->load();
+              $this->getImportFile('ekir_gmv/homepage.csv')))->load();
 
         $this->log("Contact detail data loaded.");
     }
@@ -259,7 +455,7 @@ class CRM_Gmv_ImportController
     protected function loadOrganisations()
     {
         $this->organisations = (new CRM_Gmv_Entity_Organization($this,
-            $this->getImportFile('ekir_gmv/organization.csv')))->load();
+                $this->getImportFile('ekir_gmv/organization.csv')))->load();
 
         $this->log("Organization data loaded.");
     }
@@ -271,21 +467,25 @@ class CRM_Gmv_ImportController
     protected function loadContacts()
     {
         $this->individuals_xcm = (new CRM_Gmv_Entity_Individual($this,
-            $this->getImportFile('ekir_gmv/person.csv')))->load()->convertToXcmDataSet();
+                $this->getImportFile('ekir_gmv/person.csv')))->load()->convertToXcmDataSet();
 
         $this->individuals = (new CRM_Gmv_Entity_Individual($this,
-            $this->getImportFile('ekir_gmv/person.csv')))->load();
+                $this->getImportFile('ekir_gmv/person.csv')))->load();
 
         $this->log("Contact data loaded.");
     }
+
+
+
+    /*****************************************************************
+     *                  IMPORT / SYNCHRONISATION                    **
+     *****************************************************************/
 
     /**
      * Apply the option groups
      */
     protected function syncOrganisations()
     {
-        // todo: organisations deleted?
-
         // update/create organisation data
         $newly_created_contacts = [];
         $counter = 0;
@@ -414,119 +614,131 @@ class CRM_Gmv_ImportController
     }
 
     /**
-     * Record changes so we can later generate the change activities
-     *
-     * @param $contact_id integer
-     * @param $attribute string
-     * @param $old_value string
-     * @param $new_value string
+     * Synchronise all emails
      */
-    protected function recordChange($contact_id, $attribute, $old_value, $new_value)
+    public function syncEmails()
     {
-        // some exceptions:
-        if ($new_value === '0' && $old_value === null) {
-            return;
-        }
-        $this->recorded_changes[$contact_id][$attribute] = [$old_value, $new_value];
-    }
+        $this->log("Synchronising emails...", 'info');
+        $contact2email_wanted = [];
+        $contact2email_current = [];
 
-    /**
-     * Will update the given contact data
-     * @param $contact_id integer already identified contact id
-     * @param $contact_data array contact data to be added
-     */
-    public function updateContact($contact_id, $contact_data)
-    {
-        unset($contact_data['gmv_id']);
-        $current_contact_data = $this->api3('Contact', 'getsingle', ['id' => $contact_id]);
-        $contact_update = [];
-        foreach ($contact_data as $field_name => $requested_value) {
-            $current_value = CRM_Utils_Array::value($field_name, $current_contact_data);
-            if ($current_value != $requested_value) {
-                $this->recordChange($contact_id, $field_name, $current_value, $requested_value);
-                $contact_update[$field_name] = $requested_value;
+        // generate expected email by contact list
+        $records = $this->emails->getAllRecords();
+        foreach ($records as $record) {
+            $contact_id = $this->getGmvContactId($record['contact_id']);
+            if ($contact_id) {
+                $record['contact_id'] = $contact_id;
+                $contact2email_wanted[$contact_id][] = $record;
             }
         }
 
-        if (!empty($contact_update)) {
-            $contact_update['id'] = $contact_id;
-            $this->api3('Contact', 'create', $contact_update);
-        }
-    }
-
-    /**
-     * Get the identity tracker type fpr the GMV identity type
-     */
-    public function getGmvIdType() {
-        return 'gmv_id';
-    }
-
-    /** will fill the gmv id cache */
-    public function fillGmvIdCache() {
-        $query = CRM_Core_DAO::executeQuery("
+        // generate current email by contact list
+        $email_data = CRM_Core_DAO::executeQuery("
             SELECT 
-             entity_id  AS contact_id, 
-             identifier AS gmv_id
-            FROM civicrm_value_contact_id_history 
-            WHERE identifier_type='gmv_id';
+                email.contact_id       AS contact_id, 
+                email.email            AS email, 
+                email.id               AS email_id, 
+                email.location_type_id AS location_type_id
+            FROM civicrm_email email
+            LEFT JOIN civicrm_contact contact
+                   ON contact.id = email.contact_id
+            INNER JOIN civicrm_value_contact_id_history idtracker
+                    ON idtracker.entity_id = email.contact_id
+                   AND idtracker.identifier_type = 'gmv_id'
+            WHERE contact.is_deleted = 0;
         ");
-        while ($query->fetch()) {
-            $gmv_id = substr($query->gmv_id, 4);
-            $this->gmv_id_cache[$gmv_id] = $query->contact_id;
+        while ($email_data->fetch()) {
+            $contact2email_current[$email_data->contact_id][] = [
+                'email'            => $email_data->email,
+                'location_type_id' => $email_data->location_type_id,
+                'email_id'         => $email_data->email_id,
+                'contact_id'       => $email_data->contact_id,
+            ];
         }
-        $cache_size = count($this->gmv_id_cache);
-        $this->log("Filled GMV-ID cache with {$cache_size} entries.");
+        $email_data->free();
+
+        // now sync
+        $important_attributes = ['email', 'location_type_id'];
+        $match_order = [['email', 'location_type_id'], ['email'], ['location_type_id']];
+        foreach ($contact2email_wanted as $contact_id => &$wanted_contact_emails) {
+            // now see if this already exists in the db
+            // first try full matches, then only by email
+            foreach ($match_order as $match_attributes) {
+                foreach ($wanted_contact_emails as $index => $wanted_contact_email) {
+                    $existing_email = $this->extractCurrentDetail($contact2email_current[$contact_id] ?? [], $wanted_contact_email, $match_attributes);
+                    if ($existing_email) {
+                        // we have a match!
+                        unset($wanted_contact_emails[$index]); // we got this
+                        $diff = $this->diff($wanted_contact_email, $existing_email, $important_attributes, ['email_id'], false);
+                        if ($diff) {
+                            // but...it needs to be updated
+                            $this->log("Updating email [{$existing_email['email_id']}]: {$wanted_contact_email['email']}", 'debug');
+                            $this->api3('Email', 'create', [
+                                'id' => $existing_email['email_id'],
+                                'email' => $wanted_contact_email['email'],
+                                'location_type_id' => $wanted_contact_email['location_type_id'],
+                            ]);
+                            $this->recordChange($existing_email['contact_id'], "email [{$existing_email['location_type_id']}]", $existing_email['email'], $wanted_contact_email['email']);
+                        }
+                        continue 3; // move on to the next wanted email
+                    }
+                }
+            }
+
+            // when we get here, the remaining emails need to be created
+            foreach ($wanted_contact_emails as $wanted_contact_email) {
+                $this->api3('Email', 'create', [
+                    'contact_id' => $wanted_contact_email['contact_id'],
+                    'email' => $wanted_contact_email['email'],
+                    'location_type_id' => $wanted_contact_email['location_type_id'],
+                ]);
+                $this->log("Created email {$wanted_contact_email['email']} for contact {$wanted_contact_email['contact_id']}", 'debug');
+                $this->recordChange($contact_id, "email [{$wanted_contact_email['location_type_id']}]", '', $wanted_contact_email['email']);
+            }
+        }
+        $this->log("Synchronising emails done.", 'info');
     }
 
-    /**
-     * Get a contact_id of the contact with the given GMV-ID
-     *
-     * @param $gmv_id
-     */
-    public function getGmvContactId($gmv_id) {
-        if (isset($this->gmv_id_cache[$gmv_id])) {
-            return $this->gmv_id_cache[$gmv_id];
-        }
 
-        $gmv_id = 'GMV-' . $gmv_id;
-        $result = $this->api3('Contact', 'findbyidentity', [
-            'identifier' => $gmv_id,
-            'identifier_type' => $this->getGmvIdType(),
-        ]);
-        if (isset($result['id'])) {
-            $this->gmv_id_cache[$gmv_id] = $result['id'];
-            return $result['id'];
-        } else {
-            return null;
-        }
-    }
+
 
     /**
-     * Get a contact_id of the contact with the given GMV-ID
-     *
-     * @param $gmv_id
+     * Take the recorded change items and turn into an activity with the contact
      */
-    public function setGmvContactId($contact_id, $gmv_id) {
-        $gmv_id = 'GMV-' . $gmv_id;
-        $this->api3('Contact', 'addidentity', [
-            'contact_id' => $contact_id,
-            'identifier' => $gmv_id,
-            'identifier_type' => $this->getGmvIdType(),
-        ]);
-        $this->gmv_id_cache[$gmv_id] = $contact_id;
-    }
-
-    /**
-     * Run a CiviCRM API3 call
-     *
-     * @param $entity string
-     * @param $action string
-     * @param array $parameters
-     * @throws \CiviCRM_API3_Exception API exception
-     */
-    public function api3($entity, $action, $parameters = [])
+    public function generateChangeActivities()
     {
-        // anything to do here?
-        return civicrm_api3($entity, $action, $parameters);
+        $this->log("TODO: activities", 'todo');
+        $xcm_profile_name = Civi::settings()->get('gmv_xcm_profile_individuals');
+        $xcm_profile = CRM_Xcm_Configuration::getConfigProfile($xcm_profile_name);
+
+        foreach ($this->recorded_changes as $contact_id => $change_set) {
+            if (!empty($change_set)) {
+                // create activity
+                $data = array(
+                    'differing_attributes' => $change_set,
+                    'fieldlabels'          => $this->getFieldLabels($change_set, $xcm_profile),
+                    'existing_contact'     => $contact_id,
+                );
+
+                $activity_data = array(
+                    'activity_type_id'   => $options['diff_activity'],
+                    'subject'            => $subject,
+                    'status_id'          => 'Completed',
+                    'activity_date_time' => date("YmdHis"),
+                    'target_contact_id'  => (int) $contact_id,
+                    'source_contact_id'  => todo,
+                    'campaign_id'        => CRM_Utils_Array::value('campaign_id', $contact_data),
+                    'details'            => $this->renderTemplate('activity/diff.tpl', $data),
+                );
+
+                try {
+                    $activity = CRM_Activity_BAO_Activity::create($activity_data);
+                } catch (Exception $e) {
+                    // some problem with the creation
+                    error_log("de.systopia.xcm: error when trying to create diff activity: " . $e->getMessage());
+                }
+            }
+        }
     }
+
 }
