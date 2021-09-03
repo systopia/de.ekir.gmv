@@ -66,84 +66,6 @@ class CRM_Gmv_ImportController
         }
     }
 
-    /**
-     * Get the path for the source data
-     */
-    public function getDataPath()
-    {
-        $path = $this->folder . DIRECTORY_SEPARATOR . 'data';
-        if (!file_exists($path)) {
-            mkdir($path);
-        }
-        return $path;
-    }
-
-    /**
-     * Get the path for the source data
-     *
-     * @return string folder
-     */
-    public function getFolder()
-    {
-        $base_folder = self::getBaseFolder();
-        return substr($this->folder, strlen($base_folder) + 1);
-    }
-
-    /**
-     * log message
-     */
-    public function log($message, $level = 'info', $context = []) {
-        // todo: implement log to file
-        Civi::log()->log($level, $message, $context);
-    }
-
-
-    /**
-     * Return the base folder for all import data
-     *
-     * @return string
-     */
-    public static function getBaseFolder()
-    {
-        $path = Civi::paths()->getPath('[civicrm.files]/gmv_imports');
-        if (!file_exists($path)) {
-            mkdir($path);
-        }
-        return $path;
-    }
-
-    /**
-     * Get the full file name of an import file
-     *
-     * @param $file_name string
-     *  local file name
-     *
-     * @return string
-     *  full file path
-     */
-    public function getImportFile($file_name)
-    {
-        $file_path = $this->getDataPath() . DIRECTORY_SEPARATOR . $file_name;
-        if (!file_exists($file_path)) {
-            $this->log("File '{$file_name}' not found!", 'error');
-        }
-        if (!is_readable($file_path)) {
-            $this->log("File '{$file_name}' cannot be read!", 'error');
-        }
-        return $file_path;
-    }
-
-    /**
-     * Return the base folder for all import data
-     *
-     * @return string
-     */
-    public static function getFullPath($folder_name)
-    {
-        return self::getBaseFolder() . DIRECTORY_SEPARATOR . $folder_name;
-    }
-
-
     /********************************************************************
      *                         IMPORT CODE                              *
      *******************************************************************/
@@ -194,7 +116,7 @@ class CRM_Gmv_ImportController
 //        $this->loadContacts();
 //        $this->syncContacts();
         $this->syncEmails();
-//        $this->syncPhones();
+        $this->syncPhones();
 //        $this->syncAddresses();
         $this->generateChangeActivities();
     }
@@ -265,6 +187,7 @@ class CRM_Gmv_ImportController
             $gmv_id = substr($query->gmv_id, 4);
             $this->gmv_id_cache[$gmv_id] = $query->contact_id;
         }
+        $query->free();
         $cache_size = count($this->gmv_id_cache);
         $this->log("Filled GMV-ID cache with {$cache_size} entries.");
     }
@@ -274,9 +197,14 @@ class CRM_Gmv_ImportController
      *
      * @param $gmv_id
      */
-    public function getGmvContactId($gmv_id) {
+    public function getGmvContactId($gmv_id, $cache_only = false) {
         if (isset($this->gmv_id_cache[$gmv_id])) {
             return $this->gmv_id_cache[$gmv_id];
+        } else {
+            if ($cache_only) {
+                // shortcut to skip lookup
+                return null;
+            }
         }
 
         $gmv_id = 'GMV-' . $gmv_id;
@@ -328,21 +256,19 @@ class CRM_Gmv_ImportController
      * @param $attributes array of attributes to consider
      * @param $strip_attributes array attributes to strip from the result
      */
-    protected function diff($desired_entity, $existing_entity, $attributes, $strip_attributes = [], $case_sensitive = true)
+    protected function diff($desired_entity, $existing_entity, $attributes, $strip_attributes = [], $case_agnostic_attributes = [])
     {
         // first, find out if the entities are different
         $diff = [];
         foreach ($attributes as $attribute) {
             $desired_value = $desired_entity[$attribute] ?? null;
             $existing_value = $existing_entity[$attribute] ?? null;
-            if ($case_sensitive) {
-                if ($desired_value != $existing_value) {
-                    $diff[$attribute] = $desired_value;
-                }
-            } else {
-                if (strtolower($desired_value) != strtolower($existing_value)) {
-                    $diff[$attribute] = $desired_value;
-                }
+            if (in_array($attribute, $case_agnostic_attributes)) {
+                $desired_value = strtolower($desired_value);
+                $existing_value = strtolower($existing_value);
+            }
+            if ($desired_value != $existing_value) {
+                $diff[$attribute] = $desired_value;
             }
         }
 
@@ -359,12 +285,16 @@ class CRM_Gmv_ImportController
      * @param $attributes array list of attributes to take into account
      * @return array|null option from the options array that matches
      */
-    protected function extractCurrentDetail($options, $search, $attributes) {
+    protected function extractCurrentDetail($options, $search, $attributes, $case_agnostic_attributes = []) {
         foreach ($options as $option) {
             // accept the option, if all attributes match
             foreach ($attributes as $attribute) {
                 $requested_value = $search[$attribute] ?? null;
                 $option_value = $option[$attribute] ?? null;
+                if (in_array($attribute, $case_agnostic_attributes)) {
+                    $requested_value = strtolower($requested_value);
+                    $option_value = strtolower($option_value);
+                }
                 if ($requested_value != $option_value) {
                     continue 2;
                 }
@@ -399,6 +329,7 @@ class CRM_Gmv_ImportController
      */
     protected function syncDataStructures()
     {
+        // todo: do we need this?
         $this->log("Syncing data structures");
         $customData = new CRM_Gmv_CustomData(E::LONG_NAME);
         $customData->syncOptionGroup(E::path('resources/option_group_catechism.json'));
@@ -625,7 +556,7 @@ class CRM_Gmv_ImportController
         // generate expected email by contact list
         $records = $this->emails->getAllRecords();
         foreach ($records as $record) {
-            $contact_id = $this->getGmvContactId($record['contact_id']);
+            $contact_id = $this->getGmvContactId($record['contact_id'], true);
             if ($contact_id) {
                 $record['contact_id'] = $contact_id;
                 $contact2email_wanted[$contact_id][] = $record;
@@ -659,28 +590,28 @@ class CRM_Gmv_ImportController
 
         // now sync
         $important_attributes = ['email', 'location_type_id'];
-        $match_order = [['email', 'location_type_id'], ['email'], ['location_type_id']];
+        $match_order = [['email', 'location_type_id'], ['email']];
         foreach ($contact2email_wanted as $contact_id => &$wanted_contact_emails) {
             // now see if this already exists in the db
             // first try full matches, then only by email
-            foreach ($match_order as $match_attributes) {
-                foreach ($wanted_contact_emails as $index => $wanted_contact_email) {
-                    $existing_email = $this->extractCurrentDetail($contact2email_current[$contact_id] ?? [], $wanted_contact_email, $match_attributes);
+            foreach ($wanted_contact_emails as $index => $wanted_contact_email) {
+                foreach ($match_order as $match_attributes) {
+                    $existing_email = $this->extractCurrentDetail($contact2email_current[$contact_id] ?? [], $wanted_contact_email, $match_attributes, ['email']);
                     if ($existing_email) {
                         // we have a match!
                         unset($wanted_contact_emails[$index]); // we got this
-                        $diff = $this->diff($wanted_contact_email, $existing_email, $important_attributes, ['email_id'], false);
+                        $diff = $this->diff($wanted_contact_email, $existing_email, $important_attributes, ['email_id'], ['email']);
                         if ($diff) {
                             // but...it needs to be updated
-                            $this->log("Updating email [{$existing_email['email_id']}]: {$wanted_contact_email['email']}", 'debug');
                             $this->api3('Email', 'create', [
                                 'id' => $existing_email['email_id'],
                                 'email' => $wanted_contact_email['email'],
                                 'location_type_id' => $wanted_contact_email['location_type_id'],
                             ]);
+                            $this->log("Updated email [{$existing_email['email_id']}]: {$wanted_contact_email['email']}", 'debug');
                             $this->recordChange($existing_email['contact_id'], "email [{$existing_email['location_type_id']}]", $existing_email['email'], $wanted_contact_email['email']);
                         }
-                        continue 3; // move on to the next wanted email
+                        continue 2; // move on to the next wanted email
                     }
                 }
             }
@@ -700,6 +631,96 @@ class CRM_Gmv_ImportController
     }
 
 
+    /**
+     * Synchronise all phones
+     */
+    public function syncPhones()
+    {
+        $this->log("Synchronising phones...", 'info');
+        $contact2phone_wanted = [];
+        $contact2phone_current = [];
+
+        // generate expected phone by contact list
+        $records = $this->phones->getAllRecords();
+        foreach ($records as $record) {
+            $contact_id = $this->getGmvContactId($record['contact_id'], true);
+            if ($contact_id) {
+                $record['contact_id'] = $contact_id;
+                $contact2phone_wanted[$contact_id][] = $record;
+            }
+        }
+
+        // generate current phone by contact list
+        $phone_data = CRM_Core_DAO::executeQuery("
+            SELECT 
+                phone.contact_id       AS contact_id, 
+                phone.phone            AS phone, 
+                phone.id               AS phone_id, 
+                phone.phone_type_id    AS phone_type_id, 
+                phone.location_type_id AS location_type_id
+            FROM civicrm_phone phone
+            LEFT JOIN civicrm_contact contact
+                   ON contact.id = phone.contact_id
+            INNER JOIN civicrm_value_contact_id_history idtracker
+                    ON idtracker.entity_id = phone.contact_id
+                   AND idtracker.identifier_type = 'gmv_id'
+            WHERE contact.is_deleted = 0;
+        ");
+        while ($phone_data->fetch()) {
+            $contact2phone_current[$phone_data->contact_id][] = [
+                'phone'            => $phone_data->phone,
+                'location_type_id' => $phone_data->location_type_id,
+                'phone_type_id'    => $phone_data->phone_type_id,
+                'phone_id'         => $phone_data->phone_id,
+                'contact_id'       => $phone_data->contact_id,
+            ];
+        }
+        $phone_data->free();
+
+        // now sync
+        $important_attributes = ['phone', 'location_type_id', 'phone_type_id'];
+        $match_order = [['phone', 'location_type_id', 'phone_type_id'], ['phone', 'phone_type_id'], ['phone', 'location_type_id'], ['phone']];
+        foreach ($contact2phone_wanted as $contact_id => &$wanted_contact_phones) {
+            // now see if this already exists in the db
+            // first try full matches, then only by phone
+            foreach ($wanted_contact_phones as $index => $wanted_contact_phone) {
+                foreach ($match_order as $match_attributes) {
+                    $existing_phone = $this->extractCurrentDetail($contact2phone_current[$contact_id] ?? [], $wanted_contact_phone, $match_attributes);
+                    if ($existing_phone) {
+                        // we have a match!
+                        unset($wanted_contact_phones[$index]); // we got this
+                        $diff = $this->diff($wanted_contact_phone, $existing_phone, $important_attributes, ['phone_id'], ['phone']);
+                        if ($diff) {
+                            // but...it needs to be updated
+                            $this->api3('Phone', 'create', [
+                                'id' => $existing_phone['phone_id'],
+                                'phone' => $wanted_contact_phone['phone'],
+                                'phone_type_id' => $wanted_contact_phone['phone_type_id'],
+                                'location_type_id' => $wanted_contact_phone['location_type_id'],
+                            ]);
+                            $this->log("Updated phone [{$existing_phone['phone_id']}]: '{$wanted_contact_phone['phone']}'", 'debug');
+                            $this->recordChange($existing_phone['contact_id'], "phone [{$existing_phone['location_type_id']}]", $existing_phone['phone'], $wanted_contact_phone['phone']);
+                        }
+                        continue 2; // move on to the next wanted phone
+                    }
+                }
+            }
+
+            // when we get here, the remaining phones need to be created
+            foreach ($wanted_contact_phones as $wanted_contact_phone) {
+                $this->api3('Phone', 'create', [
+                    'contact_id' => $wanted_contact_phone['contact_id'],
+                    'phone' => $wanted_contact_phone['phone'],
+                    'phone_type_id' => $wanted_contact_phone['phone_type_id'],
+                    'location_type_id' => $wanted_contact_phone['location_type_id'],
+                ]);
+                $this->log("Created phone '{$wanted_contact_phone['phone']}' for contact {$wanted_contact_phone['contact_id']}", 'debug');
+                $this->recordChange($contact_id, "phone [{$wanted_contact_phone['location_type_id']}]", '', $wanted_contact_phone['phone']);
+            }
+        }
+        $this->log("Synchronising phones done.", 'info');
+    }
+
 
 
     /**
@@ -707,7 +728,8 @@ class CRM_Gmv_ImportController
      */
     public function generateChangeActivities()
     {
-        $this->log("TODO: activities", 'todo');
+        $count = count($this->recorded_changes);
+        $this->log("TODO: {$count} activities", 'info');
         $xcm_profile_name = Civi::settings()->get('gmv_xcm_profile_individuals');
         $xcm_profile = CRM_Xcm_Configuration::getConfigProfile($xcm_profile_name);
 
@@ -739,6 +761,84 @@ class CRM_Gmv_ImportController
                 }
             }
         }
+    }
+
+
+    /**
+     * Get the path for the source data
+     */
+    public function getDataPath()
+    {
+        $path = $this->folder . DIRECTORY_SEPARATOR . 'data';
+        if (!file_exists($path)) {
+            mkdir($path);
+        }
+        return $path;
+    }
+
+    /**
+     * Get the path for the source data
+     *
+     * @return string folder
+     */
+    public function getFolder()
+    {
+        $base_folder = self::getBaseFolder();
+        return substr($this->folder, strlen($base_folder) + 1);
+    }
+
+    /**
+     * log message
+     */
+    public function log($message, $level = 'info', $context = []) {
+        // todo: implement log to file
+        Civi::log()->log($level, $message, $context);
+    }
+
+
+    /**
+     * Return the base folder for all import data
+     *
+     * @return string
+     */
+    public static function getBaseFolder()
+    {
+        $path = Civi::paths()->getPath('[civicrm.files]/gmv_imports');
+        if (!file_exists($path)) {
+            mkdir($path);
+        }
+        return $path;
+    }
+
+    /**
+     * Get the full file name of an import file
+     *
+     * @param $file_name string
+     *  local file name
+     *
+     * @return string
+     *  full file path
+     */
+    public function getImportFile($file_name)
+    {
+        $file_path = $this->getDataPath() . DIRECTORY_SEPARATOR . $file_name;
+        if (!file_exists($file_path)) {
+            $this->log("File '{$file_name}' not found!", 'error');
+        }
+        if (!is_readable($file_path)) {
+            $this->log("File '{$file_name}' cannot be read!", 'error');
+        }
+        return $file_path;
+    }
+
+    /**
+     * Return the base folder for all import data
+     *
+     * @return string
+     */
+    public static function getFullPath($folder_name)
+    {
+        return self::getBaseFolder() . DIRECTORY_SEPARATOR . $folder_name;
     }
 
 }
