@@ -30,7 +30,7 @@ class CRM_Gmv_Entity_Organization extends CRM_Gmv_Entity_Contact
         'historical' => '_historic',
         'parent_id' => 'gmv_data.gmv_data_master_id',
         'designation' => 'organization_name',
-        'additions' => 'note',
+        'additions' => 'gmv_data.gmv_addition',
         'disbanded' => 'gmv_data.gmv_data_disbanded',
         'established' => 'gmv_data.gmv_data_established',
         'catechism' => 'gmv_data.gmv_data_catechism',
