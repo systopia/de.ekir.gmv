@@ -108,7 +108,7 @@ class CRM_Gmv_ImportController
     {
         $this->fillGmvIdCache();
         $this->log("Starting GMV importer on: " . $this->getFolder());
-        //$this->syncDataStructures();
+        $this->syncDataStructures();
         $this->loadLists();
         $this->loadContactDetails();
 //        $this->loadOrganisations();
@@ -117,7 +117,8 @@ class CRM_Gmv_ImportController
 //        $this->syncContacts();
 //        $this->syncEmails();
 //        $this->syncPhones();
-        $this->syncAddresses();
+//        $this->syncAddresses();
+        $this->recordChange(23899, 'gmv_data.gmv_data_government_district', 'blop', 'blarp');
         $this->generateChangeActivities();
     }
 
@@ -863,41 +864,100 @@ class CRM_Gmv_ImportController
      */
     public function generateChangeActivities()
     {
-        $count = count($this->recorded_changes);
-        $this->log("TODO: {$count} activities", 'info');
-        $xcm_profile_name = Civi::settings()->get('gmv_xcm_profile_individuals');
-        $xcm_profile = CRM_Xcm_Configuration::getConfigProfile($xcm_profile_name);
+        $activity_type_id = (int) Civi::settings()->get('gmv_change_activity_type_id');
+        if (!$activity_type_id) {
+            $this->log('Anlegen der Änderungsaktivitäten deaktiviert (kein Aktivitätstyp ausgewählt)', 'debug');
+        }
 
+        $smarty = CRM_Core_Smarty::singleton();
         foreach ($this->recorded_changes as $contact_id => $change_set) {
             if (!empty($change_set)) {
-                // create activity
-                $data = array(
-                    'differing_attributes' => $change_set,
-                    'fieldlabels'          => $this->getFieldLabels($change_set, $xcm_profile),
-                    'existing_contact'     => $contact_id,
-                );
+                // compile the change data
+                $change_data = [];
+                foreach ($change_set as $key => $old_new_value) {
+                    $change_data[] = [
+                        'label' => $this->getChangeLabel($key),
+                        'old_value' => $this->formatValue($key, $old_new_value[0]),
+                        'new_value' => $this->formatValue($key, $old_new_value[1]),
+                    ];
+                }
 
-                $activity_data = array(
-                    'activity_type_id'   => $options['diff_activity'],
-                    'subject'            => $subject,
+                // render the change data
+                $smarty->assign('change_set', $change_data);
+
+                // create result
+                $this->api3('Activity', 'create', [
+                    'activity_type_id'   => 1, //$activity_type_id,
+                    'subject'            => "Update durch GMV",
                     'status_id'          => 'Completed',
                     'activity_date_time' => date("YmdHis"),
                     'target_contact_id'  => (int) $contact_id,
-                    'source_contact_id'  => todo,
-                    'campaign_id'        => CRM_Utils_Array::value('campaign_id', $contact_data),
-                    'details'            => $this->renderTemplate('activity/diff.tpl', $data),
-                );
-
-                try {
-                    $activity = CRM_Activity_BAO_Activity::create($activity_data);
-                } catch (Exception $e) {
-                    // some problem with the creation
-                    error_log("de.systopia.xcm: error when trying to create diff activity: " . $e->getMessage());
-                }
+                    'source_contact_id'  => CRM_Core_Session::getLoggedInContactID(),
+                    'details'            => $smarty->fetch(E::path('resources/change_record.tpl'))
+                ]);
             }
         }
     }
 
+    /**
+     * Get the label of a field name
+     *
+     * @param $field_name
+     *   technical field name
+     * @return string
+     *   label for the string
+     */
+    function getChangeLabel($field_name)
+    {
+        static $label_cache = [];
+        if (!isset($label_cache[$field_name])) {
+            $known_labels = [
+                'organization_name' => 'Organisationsname',
+                'first_name' => 'Vorname',
+                'last_name' => 'Nachname',
+                'birth_date' => 'Geburtsdatum',
+                'gender_id' => 'Geschlecht',
+                'prefix_id' => 'Anrede',
+                'job_title' => 'Berufsbezeichnung',
+                'city' => 'Stadt',
+                'country_id' => 'Land',
+                'street_address' => 'Straße/Hausnummer',
+                'postal_code' => 'Postleitzahl',
+                'supplemental_address_1' => 'Addresszusatz',
+                'email' => 'E-Mail',
+                'phone' => 'Telefon',
+                'is_primary' => 'Primär?',
+                'location_type_id' => 'Typ',
+                'phone_type_id' => 'Telefonart',
+            ];
+
+            // check if it's a custom field
+            if (isset($known_labels[$field_name])) {
+                // check if it's in the list
+                $label_cache[$field_name] = $known_labels[$field_name];
+            } elseif (strstr($field_name, '.')) {
+                // check if it's a custom field
+                [$group_name, $field_key] = explode('.', $field_name, 2);
+                $field = CRM_Gmv_CustomData::getCustomField($group_name, $field_key);
+                if ($field) {
+                    $label_cache[$field_name] = $field['label'];
+                }
+            } else {
+                $this->log("No label for changed field '{$field_name}'", 'warning');
+                $label_cache[$field_name] = ucwords($field_name);
+            }
+        }
+        return $label_cache[$field_name] ?? $field_name;
+    }
+
+    /**
+     * Get the label of a field name
+     */
+    function formatValue($field_name, $value)
+    {
+        gender_id country_id location_type_id  phone_type_id
+        return $value;
+    }
 
 
 

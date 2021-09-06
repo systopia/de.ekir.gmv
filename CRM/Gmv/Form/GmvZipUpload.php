@@ -45,6 +45,15 @@ class CRM_Gmv_Form_GmvZipUpload extends CRM_Core_Form
         );
 
         $this->add(
+            'select',
+            'gmv_change_activity_type_id',
+            "Aktivitätstyp für Änderungsaufzeichnung",
+            $this->getActivityTypes(),
+            ['class' => 'crm-select2 huge'],
+            true
+        );
+
+        $this->add(
             'file',
             'gmv_zip',
             ts('Import Data File'),
@@ -59,6 +68,7 @@ class CRM_Gmv_Form_GmvZipUpload extends CRM_Core_Form
         $this->setDefaults([
             'gmv_xcm_profile_individuals' => Civi::settings()->get('gmv_xcm_profile_individuals'),
             'gmv_xcm_profile_organisations' => Civi::settings()->get('gmv_xcm_profile_organisations'),
+            'gmv_change_activity_type_id' => Civi::settings()->get('gmv_change_activity_type_id'),
         ]);
 
         // add the buttons
@@ -79,6 +89,7 @@ class CRM_Gmv_Form_GmvZipUpload extends CRM_Core_Form
         $values = $this->exportValues();
         Civi::settings()->set('gmv_xcm_profile_individuals', $values['gmv_xcm_profile_individuals']);
         Civi::settings()->set('gmv_xcm_profile_organisations', $values['gmv_xcm_profile_organisations']);
+        Civi::settings()->set('gmv_change_activity_type_id', $values['gmv_change_activity_type_id']);
 
         $zip_file_data = $this->_submitFiles['gmv_zip'];
         if (!empty($zip_file_data['error']) || empty($zip_file_data['tmp_name'])) {
@@ -104,4 +115,23 @@ class CRM_Gmv_Form_GmvZipUpload extends CRM_Core_Form
         parent::postProcess();
     }
 
+    /**
+     * Get a list of activity types
+     *
+     * @return array list of activity types
+     */
+    protected function getActivityTypes()
+    {
+        $activity_types = [];
+        $query = civicrm_api3('OptionValue', 'get', [
+            'option_group_id' => 'activity_type',
+            'return' => 'value,label',
+            'option.limit' => 0,
+            'option.sort' => 'label asc'
+        ]);
+        foreach ($query['values'] as $record) {
+            $activity_types[$record['value']] = $record['label'];
+        }
+        return $activity_types;
+    }
 }
