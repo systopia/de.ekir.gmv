@@ -907,7 +907,7 @@ class CRM_Gmv_ImportController
      * @return string
      *   label for the string
      */
-    function getChangeLabel($field_name)
+    protected function getChangeLabel($field_name)
     {
         static $label_cache = [];
         if (!isset($label_cache[$field_name])) {
@@ -952,14 +952,93 @@ class CRM_Gmv_ImportController
 
     /**
      * Get the label of a field name
+     *
+     * @param $field_name string internal field name
+     * @param $value string value
+     * @return string the value to be printed
      */
-    function formatValue($field_name, $value)
+    protected function formatValue($field_name, $value)
     {
-        gender_id country_id location_type_id  phone_type_id
+        switch ($field_name) {
+            case 'gender_id':
+                return $this->optionValueLookup($value, 'gender');
+            case 'prefix_id':
+                return $this->optionValueLookup($value, 'individual_prefix');
+            case 'phone_type_id':
+                return $this->optionValueLookup($value, 'phone_type');
+            case 'country_id':
+                return $this->countryLookup($value);
+            case 'location_type_id':
+                return $this->locationLookup($value);
+            default:
+                // check if it's a custom field with a value
+                if (strstr($field_name, '.')) {
+                    [$group_name, $field_key] = explode('.', $field_name, 2);
+                    $field = CRM_Gmv_CustomData::getCustomField($group_name, $field_key);
+                    if ($field && !empty($field['option_group_id'])) {
+                        return $this->optionValueLookup($value, $field['option_group_id']);
+                    }
+                }
+        }
         return $value;
     }
 
+    /**
+     * @param $value string
+     *      the value to be looked up
+     * @param $option_group_id string
+     *      option group name or ID
+     *
+     * @return string formatted value
+     */
+    protected function optionValueLookup($value, $option_group_id) {
+        static $option_groups = [];
+        if (!isset($option_groups[$option_group_id])) {
+            $option_groups[$option_group_id] = [];
+            $data = $this->api3('OptionValue', 'get', [
+                'option_group_id' => $option_group_id,
+                'return' => 'value,label',
+                'option.limit' => 0,
+            ]);
+            foreach ($data['values'] as $entry) {
+                $option_groups[$option_group_id][$entry['value']] = $entry['label'];
+            }
+        }
 
+        return $option_groups[$option_group_id][$value] ?? $value;
+    }
+
+    /**
+     * Get the location type resolved value
+     *
+     * @param $value
+     */
+    protected function locationLookup($value)
+    {
+        static $location_types = null;
+        if ($location_types === null) {
+            $location_types = $this->api3('LocationType', 'get', ['sequential' => 0])['values'];
+        }
+        return $location_types[$value] ?? $value;
+    }
+
+    /**
+     * Get the country
+     *
+     * @param $value
+     */
+    protected function countryLookup($value)
+    {
+        static $country_data = null;
+        if ($country_data === null) {
+            $country_data = civicrm_api3('Country', 'get', [
+                'option.limit' => 0,
+                'return' => ['id', 'name'],
+                'sequential' => 0,
+            ])['values'];
+        }
+        return $country_data[$value]['name'] ?? $value;
+    }
 
     /**
      * Make sure that only one of the records is primary,

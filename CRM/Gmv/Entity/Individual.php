@@ -69,13 +69,13 @@ class CRM_Gmv_Entity_Individual extends CRM_Gmv_Entity_Contact
             $this->entity_data = $this->getRawData(array_keys($this->data_mapping));
             $this->renameKeys($this->data_mapping);
             $this->setEntityValues('contact_type', 'Individual');
-            $this->copyEntityValue('gender_id', 'individual_prefix');
+            $this->copyEntityValue('gender_id', 'prefix_id');
 
             // do some lookups
             $this->mapEntityListValues('job_title', $this->controller->occupations);
             $this->mapEntityListValues('formal_title', $this->controller->salutations);
             $this->mapEntityValues('gender_id', $this->gender_map);
-            $this->mapEntityValues('individual_prefix', $this->prefix_map);
+            $this->mapEntityValues('prefix_id', $this->prefix_map);
 
             // only keep 'historic=t' values
             $this->filterEntityData('_historic', 'equals', 'f');
