@@ -1135,10 +1135,17 @@ class CRM_Gmv_ImportController
      * log message
      */
     public function log($message, $level = 'info', $context = []) {
-        // todo: implement log to file
-        Civi::log()->log($level, $message, $context);
-    }
+        static $log_file = null;
+        if ($log_file === null) {
+            $log_file_name = $this->folder . DIRECTORY_SEPARATOR . 'import_' . date('YmdHis') . '.log';
+            $log_file = fopen($log_file_name, 'w');
+            Civi::log()->debug("GMV Log file is '{$log_file_name}'");
+        }
 
+        // write log
+        $timestamp = date('Y-m-d H:i:s');
+        fprintf($log_file, "{$timestamp} [{$level}]: {$message}\n");
+    }
 
     /**
      * Return the base folder for all import data
