@@ -111,14 +111,13 @@ class CRM_Gmv_ImportController
         $this->syncDataStructures();
         $this->loadLists();
         $this->loadContactDetails();
-//        $this->loadOrganisations();
-//        $this->syncOrganisations();
-//        $this->loadContacts();
-//        $this->syncContacts();
-//        $this->syncEmails();
-//        $this->syncPhones();
-//        $this->syncAddresses();
-        $this->recordChange(23899, 'gmv_data.gmv_data_government_district', 'blop', 'blarp');
+        $this->loadOrganisations();
+        $this->syncOrganisations();
+        $this->loadContacts();
+        $this->syncContacts();
+        $this->syncEmails();
+        $this->syncPhones();
+        $this->syncAddresses();
         $this->generateChangeActivities();
     }
 
