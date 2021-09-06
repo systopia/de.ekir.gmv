@@ -108,7 +108,7 @@ class CRM_Gmv_ImportController
     {
         $this->fillGmvIdCache();
         $this->log("Starting GMV importer on: " . $this->getFolder());
-        $this->syncDataStructures();
+        //$this->syncDataStructures();
         $this->loadLists();
         $this->loadContactDetails();
 //        $this->loadOrganisations();
@@ -116,7 +116,7 @@ class CRM_Gmv_ImportController
 //        $this->loadContacts();
 //        $this->syncContacts();
         $this->syncEmails();
-        $this->syncPhones();
+//        $this->syncPhones();
 //        $this->syncAddresses();
         $this->generateChangeActivities();
     }
@@ -285,7 +285,7 @@ class CRM_Gmv_ImportController
      * @param $attributes array list of attributes to take into account
      * @return array|null option from the options array that matches
      */
-    protected function extractCurrentDetail($options, $search, $attributes, $case_agnostic_attributes = []) {
+    protected function fetchNextDetail($options, $search, $attributes, $case_agnostic_attributes = []) {
         foreach ($options as $option) {
             // accept the option, if all attributes match
             foreach ($attributes as $attribute) {
@@ -568,6 +568,7 @@ class CRM_Gmv_ImportController
             SELECT 
                 email.contact_id       AS contact_id, 
                 email.email            AS email, 
+                email.is_primary       AS is_primary, 
                 email.id               AS email_id, 
                 email.location_type_id AS location_type_id
             FROM civicrm_email email
@@ -582,6 +583,7 @@ class CRM_Gmv_ImportController
             $contact2email_current[$email_data->contact_id][] = [
                 'email'            => $email_data->email,
                 'location_type_id' => $email_data->location_type_id,
+                'is_primary'       => $email_data->is_primary,
                 'email_id'         => $email_data->email_id,
                 'contact_id'       => $email_data->contact_id,
             ];
@@ -589,23 +591,27 @@ class CRM_Gmv_ImportController
         $email_data->free();
 
         // now sync
-        $important_attributes = ['email', 'location_type_id'];
-        $match_order = [['email', 'location_type_id'], ['email']];
+        $important_attributes = ['email', 'location_type_id', 'is_primary'];
+        $match_order = [['email', 'location_type_id', 'is_primary'], ['email', 'location_type_id'], ['email']];
         foreach ($contact2email_wanted as $contact_id => &$wanted_contact_emails) {
+            if ($contact_id != 22989) continue;
+            // first make sure there is exactly only one is_primary
+            $this->removeDuplicates($wanted_contact_emails, ['email']);
+            $this->fixPrimary($wanted_contact_emails);
             // now see if this already exists in the db
             // first try full matches, then only by email
             foreach ($wanted_contact_emails as $index => $wanted_contact_email) {
                 foreach ($match_order as $match_attributes) {
-                    $existing_email = $this->extractCurrentDetail($contact2email_current[$contact_id] ?? [], $wanted_contact_email, $match_attributes, ['email']);
+                    $existing_email = $this->fetchNextDetail($contact2email_current[$contact_id] ?? [], $wanted_contact_email, $match_attributes, ['email']);
                     if ($existing_email) {
                         // we have a match!
                         unset($wanted_contact_emails[$index]); // we got this
                         $diff = $this->diff($wanted_contact_email, $existing_email, $important_attributes, ['email_id'], ['email']);
                         if ($diff) {
-                            // but...it needs to be updated
                             $this->api3('Email', 'create', [
                                 'id' => $existing_email['email_id'],
                                 'email' => $wanted_contact_email['email'],
+                                'is_primary' => $wanted_contact_email['is_primary'],
                                 'location_type_id' => $wanted_contact_email['location_type_id'],
                             ]);
                             $this->log("Updated email [{$existing_email['email_id']}]: {$wanted_contact_email['email']}", 'debug');
@@ -621,6 +627,7 @@ class CRM_Gmv_ImportController
                 $this->api3('Email', 'create', [
                     'contact_id' => $wanted_contact_email['contact_id'],
                     'email' => $wanted_contact_email['email'],
+                    'is_primary' => $wanted_contact_email['is_primary'],
                     'location_type_id' => $wanted_contact_email['location_type_id'],
                 ]);
                 $this->log("Created email {$wanted_contact_email['email']} for contact {$wanted_contact_email['contact_id']}", 'debug');
@@ -628,6 +635,108 @@ class CRM_Gmv_ImportController
             }
         }
         $this->log("Synchronising emails done.", 'info');
+    }
+
+    /**
+     * Synchronise all emails
+     */
+    public function syncAddresses()
+    {
+        $this->log("Synchronising addresses...", 'info');
+        $contact2address_wanted = [];
+        $contact2address_current = [];
+
+        // generate expected address by contact list
+        $records = $this->addresses->getAllRecords();
+        foreach ($records as $record) {
+            $contact_id = $this->getGmvContactId($record['contact_id'], true);
+            if ($contact_id) {
+                $record['contact_id'] = $contact_id;
+                $contact2address_wanted[$contact_id][] = $record;
+            }
+        }
+
+        // generate current address by contact list
+        $address_data = CRM_Core_DAO::executeQuery("
+            SELECT 
+                address.contact_id                AS contact_id, 
+                address.street_address            AS street_address, 
+                address.postal_code               AS postal_code, 
+                address.city                      AS city, 
+                address.supplemental_address_1    AS supplemental_address_1, 
+                address.supplemental_address_2    AS supplemental_address_2, 
+                address.is_primary                AS is_primary, 
+                address.country_id                AS country_id, 
+                address.geo_code_1                AS geo_code_1, 
+                address.geo_code_2                AS geo_code_2, 
+                address.id                        AS address_id, 
+                address.location_type_id          AS location_type_id
+            FROM civicrm_address address
+            LEFT JOIN civicrm_contact contact
+                   ON contact.id = address.contact_id
+            INNER JOIN civicrm_value_contact_id_history idtracker
+                    ON idtracker.entity_id = address.contact_id
+                   AND idtracker.identifier_type = 'gmv_id'
+            WHERE contact.is_deleted = 0;
+        ");
+        while ($address_data->fetch()) {
+            $contact2address_current[$address_data->contact_id][] = [
+                'location_type_id' => $address_data->location_type_id,
+                'street_address' => $address_data->street_address,
+                'postal_code' => $address_data->postal_code,
+                'city' => $address_data->city,
+                'supplemental_address_1' => $address_data->supplemental_address_1,
+                'supplemental_address_2' => $address_data->supplemental_address_2,
+                'is_primary' => $address_data->is_primary,
+                'country_id' => $address_data->country_id,
+                'geo_code_1' => $address_data->geo_code_1,
+                'geo_code_2' => $address_data->geo_code_2,
+                'contact_id' => $address_data->contact_id,
+                'id' => $address_data->address_id,
+            ];
+        }
+        $address_data->free();
+
+        // now sync
+        $important_attributes = ['location_type_id', ];
+        $match_order = [['address', 'location_type_id'], ['address']];
+        foreach ($contact2address_wanted as $contact_id => &$wanted_contact_addresss) {
+            // now see if this already exists in the db
+            // first try full matches, then only by address
+            foreach ($wanted_contact_addresss as $index => $wanted_contact_address) {
+                foreach ($match_order as $match_attributes) {
+                    $existing_address = $this->fetchNextDetail($contact2address_current[$contact_id] ?? [], $wanted_contact_address, $match_attributes, ['address']);
+                    if ($existing_address) {
+                        // we have a match!
+                        unset($wanted_contact_addresss[$index]); // we got this
+                        $diff = $this->diff($wanted_contact_address, $existing_address, $important_attributes, ['address_id'], ['address']);
+                        if ($diff) {
+                            // but...it needs to be updated
+                            $this->api3('Email', 'create', [
+                                'id' => $existing_address['address_id'],
+                                'address' => $wanted_contact_address['address'],
+                                'location_type_id' => $wanted_contact_address['location_type_id'],
+                            ]);
+                            $this->log("Updated address [{$existing_address['address_id']}]: {$wanted_contact_address['address']}", 'debug');
+                            $this->recordChange($existing_address['contact_id'], "address [{$existing_address['location_type_id']}]", $existing_address['address'], $wanted_contact_address['address']);
+                        }
+                        continue 2; // move on to the next wanted address
+                    }
+                }
+            }
+
+            // when we get here, the remaining addresss need to be created
+            foreach ($wanted_contact_addresss as $wanted_contact_address) {
+                $this->api3('Email', 'create', [
+                    'contact_id' => $wanted_contact_address['contact_id'],
+                    'address' => $wanted_contact_address['address'],
+                    'location_type_id' => $wanted_contact_address['location_type_id'],
+                ]);
+                $this->log("Created address {$wanted_contact_address['address']} for contact {$wanted_contact_address['contact_id']}", 'debug');
+                $this->recordChange($contact_id, "address [{$wanted_contact_address['location_type_id']}]", '', $wanted_contact_address['address']);
+            }
+        }
+        $this->log("Synchronising addresss done.", 'info');
     }
 
 
@@ -685,7 +794,7 @@ class CRM_Gmv_ImportController
             // first try full matches, then only by phone
             foreach ($wanted_contact_phones as $index => $wanted_contact_phone) {
                 foreach ($match_order as $match_attributes) {
-                    $existing_phone = $this->extractCurrentDetail($contact2phone_current[$contact_id] ?? [], $wanted_contact_phone, $match_attributes);
+                    $existing_phone = $this->fetchNextDetail($contact2phone_current[$contact_id] ?? [], $wanted_contact_phone, $match_attributes);
                     if ($existing_phone) {
                         // we have a match!
                         unset($wanted_contact_phones[$index]); // we got this
@@ -763,6 +872,76 @@ class CRM_Gmv_ImportController
         }
     }
 
+
+
+
+    /**
+     * Make sure that only one of the records is primary,
+     *  but also make sure that there is one
+     *
+     * @param array $records
+     *   list of array-based data records
+     * @param array $attributes
+     *   list of attributes that constitute a duplicate
+     */
+    public function removeDuplicates(&$records, $attributes)
+    {
+        // make sure that there is no more than one primary
+        $keys = [];
+        $duplicates = [];
+        foreach ($records as $index => &$record) {
+            $key_elements = [];
+            foreach ($attributes as $attribute) {
+                $key_elements[] = $record[$attribute] ?? '';
+            }
+            $key = implode('|', $key_elements);
+            if (in_array($key, $keys)) {
+                // this is a duplicate
+                $duplicates[] = $index;
+            } else {
+                $keys[] = $key;
+            }
+        }
+
+        // finally, remove the duplicates
+        foreach ($duplicates as $duplicate_key) {
+            unset($records[$duplicate_key]);
+        }
+    }
+
+    /**
+     * Make sure that only one of the records is primary,
+     *  but also make sure that there is one
+     *
+     * @param array $records
+     *   list of array-based data records
+     */
+    public function fixPrimary(&$records)
+    {
+        // make sure that there is no more than one primary
+        $has_primary = false;
+        foreach ($records as &$record) {
+            if ($has_primary) {
+                // we already have one, so set all others to 0
+                $record['is_primary'] = 0;
+            } else {
+                if (empty($record['is_primary'])) {
+                    $record['is_primary'] = 0;
+                } else {
+                    $has_primary = true;
+                    $record['is_primary'] = 1;
+                }
+            }
+        }
+
+        // but also make sure that there is one primary!
+        if (!$has_primary) {
+            foreach ($records as &$record) {
+                $record['is_primary'] = 1;
+                return;
+            }
+        }
+    }
 
     /**
      * Get the path for the source data
