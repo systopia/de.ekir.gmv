@@ -38,6 +38,33 @@ class CRM_Gmv_Entity_AddressData extends CRM_Gmv_Entity_Entity
         'addition' => 'supplemental_address_1',
     ];
 
+    public $country_correction = [
+        'AUT' => 'Österreich',
+        'BEL' => 'Belgien',
+        'CH' => 'Schweiz',
+        'CHE' => 'Schweiz',
+        'CZE' => 'Tschechien',
+        'Deutschlan' => 'Deutschland',
+        'DNK' => 'Dänemark',
+        'ESP' => 'Spanien',
+        'EST' => 'Estland',
+        'FRA' => 'Frankreich',
+        'GR' => 'Griechenland',
+        'GUATEMALA' => 'Guatemala',
+        'IDN' => 'Indien',
+        'IRN' => 'Iran, Islamische Republik',
+        'ISR' => 'Israel',
+        'LUX' => 'Luxemburg',
+        'NIEDERLANDE' => 'Niederlande',
+        'NLD' => 'Niederlande',
+        'NOR' => 'Norwegen',
+        'SCHWEIZ' => 'Schweiz',
+        'SPANIEN' => 'Spanien',
+        'SUI' => 'Schweiz',
+        'SWE' => 'Schweden',
+        'USA' => 'Vereinigte Staaten',
+    ];
+
     public function __construct($controller, $entity, $file)
     {
         parent::__construct($controller, 'Address', $file);
@@ -56,11 +83,32 @@ class CRM_Gmv_Entity_AddressData extends CRM_Gmv_Entity_Entity
             $this->indexBy('address_id');
 
             // look up country
+            $country_name_to_id = $this->getCountryMap();
 
-
-            // join street address
+            // join street address and set country
             foreach ($this->entity_data as &$entity_datum) {
                 $entity_datum['street_address'] = trim($entity_datum['street_address'] . ' ' . $entity_datum['_housenumber']);
+
+                // truncate the geocodes (CiviCRM restriction)
+                $entity_datum['geo_code_1'] = substr($entity_datum['geo_code_1'], 0, 14);
+                $entity_datum['geo_code_2'] = substr($entity_datum['geo_code_2'], 0, 14);
+
+                // DEAL WITH THE COUNTRY MESS
+                if (empty($entity_datum['country_id'])) {
+                    // assume country is Germany
+                    $entity_datum['country_id'] = 'Deutschland';
+                }
+
+                // apply the known corrections
+                $entity_datum['country_id'] = $this->country_correction[$entity_datum['country_id']] ?? $entity_datum['country_id'];
+
+                // map to CiviCRM ID
+                if (!isset($country_name_to_id[$entity_datum['country_id']])) {
+                    $this->log("Cannot map country '{$entity_datum['country_id']}'", 'warning');
+                    $entity_datum['country_id'] = '';
+                } else {
+                    $entity_datum['country_id'] = $country_name_to_id[$entity_datum['country_id']];
+                }
             }
 
             // remove helper column
@@ -70,4 +118,23 @@ class CRM_Gmv_Entity_AddressData extends CRM_Gmv_Entity_Entity
         return $this;
     }
 
+    /**
+     * Get a country name => country_id mapping
+     */
+    protected function getCountryMap()
+    {
+        static $country_map = null;
+        if ($country_map === null) {
+            $country_map = ['' => ''];
+            $country_data = civicrm_api3('Country', 'get', [
+                'option.limit' => 0,
+                'return' => ['id', 'name']
+            ]);
+            foreach ($country_data['values'] as $country) {
+                $country_name = ts($country['name'], ['context' => 'country']);
+                $country_map[$country_name] = $country['id'];
+            }
+        }
+        return $country_map;
+    }
 }

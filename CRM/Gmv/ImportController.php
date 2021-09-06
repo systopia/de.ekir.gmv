@@ -115,9 +115,9 @@ class CRM_Gmv_ImportController
 //        $this->syncOrganisations();
 //        $this->loadContacts();
 //        $this->syncContacts();
-        $this->syncEmails();
+//        $this->syncEmails();
 //        $this->syncPhones();
-//        $this->syncAddresses();
+        $this->syncAddresses();
         $this->generateChangeActivities();
     }
 
@@ -594,7 +594,6 @@ class CRM_Gmv_ImportController
         $important_attributes = ['email', 'location_type_id', 'is_primary'];
         $match_order = [['email', 'location_type_id', 'is_primary'], ['email', 'location_type_id'], ['email']];
         foreach ($contact2email_wanted as $contact_id => &$wanted_contact_emails) {
-            if ($contact_id != 22989) continue;
             // first make sure there is exactly only one is_primary
             $this->removeDuplicates($wanted_contact_emails, ['email']);
             $this->fixPrimary($wanted_contact_emails);
@@ -638,13 +637,110 @@ class CRM_Gmv_ImportController
     }
 
     /**
-     * Synchronise all emails
+     * Synchronise all phones
+     */
+    public function syncPhones()
+    {
+        $this->log("Synchronising phones...", 'info');
+        $contact2phone_wanted = [];
+        $contact2phone_current = [];
+
+        // generate expected phone by contact list
+        $records = $this->phones->getAllRecords();
+        foreach ($records as $record) {
+            $contact_id = $this->getGmvContactId($record['contact_id'], true);
+            if ($contact_id) {
+                $record['contact_id'] = $contact_id;
+                $contact2phone_wanted[$contact_id][] = $record;
+            }
+        }
+
+        // generate current phone by contact list
+        $phone_data = CRM_Core_DAO::executeQuery("
+            SELECT 
+                phone.contact_id       AS contact_id, 
+                phone.phone            AS phone, 
+                phone.id               AS phone_id, 
+                phone.phone_type_id    AS phone_type_id, 
+                phone.location_type_id AS location_type_id
+            FROM civicrm_phone phone
+            LEFT JOIN civicrm_contact contact
+                   ON contact.id = phone.contact_id
+            INNER JOIN civicrm_value_contact_id_history idtracker
+                    ON idtracker.entity_id = phone.contact_id
+                   AND idtracker.identifier_type = 'gmv_id'
+            WHERE contact.is_deleted = 0;
+        ");
+        while ($phone_data->fetch()) {
+            $contact2phone_current[$phone_data->contact_id][] = [
+                'phone'            => $phone_data->phone,
+                'location_type_id' => $phone_data->location_type_id,
+                'phone_type_id'    => $phone_data->phone_type_id,
+                'phone_id'         => $phone_data->phone_id,
+                'contact_id'       => $phone_data->contact_id,
+            ];
+        }
+        $phone_data->free();
+
+        // now sync
+        $important_attributes = ['phone', 'location_type_id', 'phone_type_id'];
+        $match_order = [['phone', 'location_type_id', 'phone_type_id'], ['phone', 'phone_type_id'], ['phone', 'location_type_id'], ['phone']];
+        foreach ($contact2phone_wanted as $contact_id => &$wanted_contact_phones) {
+            // first make sure there is exactly only one is_primary
+            $this->removeDuplicates($wanted_contact_phones, ['phone']);
+            $this->fixPrimary($wanted_contact_phones);
+            // now see if this already exists in the db
+            // first try full matches, then only by phone
+            foreach ($wanted_contact_phones as $index => $wanted_contact_phone) {
+                foreach ($match_order as $match_attributes) {
+                    $existing_phone = $this->fetchNextDetail($contact2phone_current[$contact_id] ?? [], $wanted_contact_phone, $match_attributes);
+                    if ($existing_phone) {
+                        // we have a match!
+                        unset($wanted_contact_phones[$index]); // we got this
+                        $diff = $this->diff($wanted_contact_phone, $existing_phone, $important_attributes, ['phone_id'], ['phone']);
+                        if ($diff) {
+                            // but...it needs to be updated
+                            $this->api3('Phone', 'create', [
+                                'id' => $existing_phone['phone_id'],
+                                'phone' => $wanted_contact_phone['phone'],
+                                'phone_type_id' => $wanted_contact_phone['phone_type_id'],
+                                'location_type_id' => $wanted_contact_phone['location_type_id'],
+                            ]);
+                            $this->log("Updated phone [{$existing_phone['phone_id']}]: '{$wanted_contact_phone['phone']}'", 'debug');
+                            $this->recordChange($existing_phone['contact_id'], "phone [{$existing_phone['location_type_id']}]", $existing_phone['phone'], $wanted_contact_phone['phone']);
+                        }
+                        continue 2; // move on to the next wanted phone
+                    }
+                }
+            }
+
+            // when we get here, the remaining phones need to be created
+            foreach ($wanted_contact_phones as $wanted_contact_phone) {
+                $this->api3('Phone', 'create', [
+                    'contact_id' => $wanted_contact_phone['contact_id'],
+                    'phone' => $wanted_contact_phone['phone'],
+                    'phone_type_id' => $wanted_contact_phone['phone_type_id'],
+                    'location_type_id' => $wanted_contact_phone['location_type_id'],
+                ]);
+                $this->log("Created phone '{$wanted_contact_phone['phone']}' for contact {$wanted_contact_phone['contact_id']}", 'debug');
+                $this->recordChange($contact_id, "phone [{$wanted_contact_phone['location_type_id']}]", '', $wanted_contact_phone['phone']);
+            }
+        }
+        $this->log("Synchronising phones done.", 'info');
+    }
+
+    /**
+     * Synchronise all addresses
      */
     public function syncAddresses()
     {
         $this->log("Synchronising addresses...", 'info');
         $contact2address_wanted = [];
         $contact2address_current = [];
+
+        // turn off geocoding
+        $geocoding_provider = Civi::settings()->get('geoProvider');
+        Civi::settings()->set('geoProvider', '');
 
         // generate expected address by contact list
         $records = $this->addresses->getAllRecords();
@@ -698,26 +794,36 @@ class CRM_Gmv_ImportController
         $address_data->free();
 
         // now sync
-        $important_attributes = ['location_type_id', ];
-        $match_order = [['address', 'location_type_id'], ['address']];
-        foreach ($contact2address_wanted as $contact_id => &$wanted_contact_addresss) {
+        $important_attributes = ['street_address', 'postal_code', 'city', 'supplemental_address_1', 'location_type_id'];
+        $match_order = [['street_address', 'postal_code', 'city', 'supplemental_address_1', 'location_type_id'], ['street_address', 'postal_code', 'city', 'supplemental_address_1']];
+        foreach ($contact2address_wanted as $contact_id => &$wanted_contact_addresses) {
+            // first make sure there is exactly only one is_primary
+            $this->removeDuplicates($wanted_contact_addresses, ['street_address', 'postal_code']);
+            $this->fixPrimary($wanted_contact_addresses);
             // now see if this already exists in the db
             // first try full matches, then only by address
-            foreach ($wanted_contact_addresss as $index => $wanted_contact_address) {
+            foreach ($wanted_contact_addresses as $index => $wanted_contact_address) {
                 foreach ($match_order as $match_attributes) {
                     $existing_address = $this->fetchNextDetail($contact2address_current[$contact_id] ?? [], $wanted_contact_address, $match_attributes, ['address']);
                     if ($existing_address) {
                         // we have a match!
-                        unset($wanted_contact_addresss[$index]); // we got this
+                        unset($wanted_contact_addresses[$index]); // we got this
                         $diff = $this->diff($wanted_contact_address, $existing_address, $important_attributes, ['address_id'], ['address']);
                         if ($diff) {
                             // but...it needs to be updated
-                            $this->api3('Email', 'create', [
+                            $this->api3('Address', 'create', [
                                 'id' => $existing_address['address_id'],
-                                'address' => $wanted_contact_address['address'],
+                                'contact_id' => $existing_address['contact_id'],
                                 'location_type_id' => $wanted_contact_address['location_type_id'],
+                                'street_address' => $wanted_contact_address['street_address'],
+                                'postal_code' => $wanted_contact_address['postal_code'],
+                                'city' => $wanted_contact_address['city'],
+                                'supplemental_address_1' => $wanted_contact_address['supplemental_address_1'],
+                                'country_id' => $wanted_contact_address['country_id'],
+                                'geo_code_1' => $wanted_contact_address['geo_code_1'],
+                                'geo_code_2' => $wanted_contact_address['geo_code_2'],
                             ]);
-                            $this->log("Updated address [{$existing_address['address_id']}]: {$wanted_contact_address['address']}", 'debug');
+                            $this->log("Updated address [{$existing_address['address_id']}]: {$wanted_contact_address['postal_code']}/{$wanted_contact_address['street_address']}", 'debug');
                             $this->recordChange($existing_address['contact_id'], "address [{$existing_address['location_type_id']}]", $existing_address['address'], $wanted_contact_address['address']);
                         }
                         continue 2; // move on to the next wanted address
@@ -725,110 +831,30 @@ class CRM_Gmv_ImportController
                 }
             }
 
-            // when we get here, the remaining addresss need to be created
-            foreach ($wanted_contact_addresss as $wanted_contact_address) {
-                $this->api3('Email', 'create', [
+            // when we get here, the remaining addresses need to be created
+            foreach ($wanted_contact_addresses as $wanted_contact_address) {
+                $this->api3('Address', 'create', [
                     'contact_id' => $wanted_contact_address['contact_id'],
-                    'address' => $wanted_contact_address['address'],
+                    'is_primary' => $wanted_contact_address['is_primary'],
                     'location_type_id' => $wanted_contact_address['location_type_id'],
+                    'street_address' => $wanted_contact_address['street_address'],
+                    'postal_code' => $wanted_contact_address['postal_code'],
+                    'city' => $wanted_contact_address['city'],
+                    'supplemental_address_1' => $wanted_contact_address['supplemental_address_1'],
+                    'country_id' => $wanted_contact_address['country_id'],
+                    'geo_code_1' => $wanted_contact_address['geo_code_1'],
+                    'geo_code_2' => $wanted_contact_address['geo_code_2'],
                 ]);
-                $this->log("Created address {$wanted_contact_address['address']} for contact {$wanted_contact_address['contact_id']}", 'debug');
+                $this->log("Created address {$wanted_contact_address['postal_code']}/{$wanted_contact_address['street_address']} for contact {$wanted_contact_address['contact_id']}", 'debug');
                 $this->recordChange($contact_id, "address [{$wanted_contact_address['location_type_id']}]", '', $wanted_contact_address['address']);
             }
         }
-        $this->log("Synchronising addresss done.", 'info');
+        // turn on geocoding
+        Civi::settings()->set('geoProvider', $geocoding_provider);
+
+        $this->log("Synchronising addresses done.", 'info');
     }
 
-
-    /**
-     * Synchronise all phones
-     */
-    public function syncPhones()
-    {
-        $this->log("Synchronising phones...", 'info');
-        $contact2phone_wanted = [];
-        $contact2phone_current = [];
-
-        // generate expected phone by contact list
-        $records = $this->phones->getAllRecords();
-        foreach ($records as $record) {
-            $contact_id = $this->getGmvContactId($record['contact_id'], true);
-            if ($contact_id) {
-                $record['contact_id'] = $contact_id;
-                $contact2phone_wanted[$contact_id][] = $record;
-            }
-        }
-
-        // generate current phone by contact list
-        $phone_data = CRM_Core_DAO::executeQuery("
-            SELECT 
-                phone.contact_id       AS contact_id, 
-                phone.phone            AS phone, 
-                phone.id               AS phone_id, 
-                phone.phone_type_id    AS phone_type_id, 
-                phone.location_type_id AS location_type_id
-            FROM civicrm_phone phone
-            LEFT JOIN civicrm_contact contact
-                   ON contact.id = phone.contact_id
-            INNER JOIN civicrm_value_contact_id_history idtracker
-                    ON idtracker.entity_id = phone.contact_id
-                   AND idtracker.identifier_type = 'gmv_id'
-            WHERE contact.is_deleted = 0;
-        ");
-        while ($phone_data->fetch()) {
-            $contact2phone_current[$phone_data->contact_id][] = [
-                'phone'            => $phone_data->phone,
-                'location_type_id' => $phone_data->location_type_id,
-                'phone_type_id'    => $phone_data->phone_type_id,
-                'phone_id'         => $phone_data->phone_id,
-                'contact_id'       => $phone_data->contact_id,
-            ];
-        }
-        $phone_data->free();
-
-        // now sync
-        $important_attributes = ['phone', 'location_type_id', 'phone_type_id'];
-        $match_order = [['phone', 'location_type_id', 'phone_type_id'], ['phone', 'phone_type_id'], ['phone', 'location_type_id'], ['phone']];
-        foreach ($contact2phone_wanted as $contact_id => &$wanted_contact_phones) {
-            // now see if this already exists in the db
-            // first try full matches, then only by phone
-            foreach ($wanted_contact_phones as $index => $wanted_contact_phone) {
-                foreach ($match_order as $match_attributes) {
-                    $existing_phone = $this->fetchNextDetail($contact2phone_current[$contact_id] ?? [], $wanted_contact_phone, $match_attributes);
-                    if ($existing_phone) {
-                        // we have a match!
-                        unset($wanted_contact_phones[$index]); // we got this
-                        $diff = $this->diff($wanted_contact_phone, $existing_phone, $important_attributes, ['phone_id'], ['phone']);
-                        if ($diff) {
-                            // but...it needs to be updated
-                            $this->api3('Phone', 'create', [
-                                'id' => $existing_phone['phone_id'],
-                                'phone' => $wanted_contact_phone['phone'],
-                                'phone_type_id' => $wanted_contact_phone['phone_type_id'],
-                                'location_type_id' => $wanted_contact_phone['location_type_id'],
-                            ]);
-                            $this->log("Updated phone [{$existing_phone['phone_id']}]: '{$wanted_contact_phone['phone']}'", 'debug');
-                            $this->recordChange($existing_phone['contact_id'], "phone [{$existing_phone['location_type_id']}]", $existing_phone['phone'], $wanted_contact_phone['phone']);
-                        }
-                        continue 2; // move on to the next wanted phone
-                    }
-                }
-            }
-
-            // when we get here, the remaining phones need to be created
-            foreach ($wanted_contact_phones as $wanted_contact_phone) {
-                $this->api3('Phone', 'create', [
-                    'contact_id' => $wanted_contact_phone['contact_id'],
-                    'phone' => $wanted_contact_phone['phone'],
-                    'phone_type_id' => $wanted_contact_phone['phone_type_id'],
-                    'location_type_id' => $wanted_contact_phone['location_type_id'],
-                ]);
-                $this->log("Created phone '{$wanted_contact_phone['phone']}' for contact {$wanted_contact_phone['contact_id']}", 'debug');
-                $this->recordChange($contact_id, "phone [{$wanted_contact_phone['location_type_id']}]", '', $wanted_contact_phone['phone']);
-            }
-        }
-        $this->log("Synchronising phones done.", 'info');
-    }
 
 
 
