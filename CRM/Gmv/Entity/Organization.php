@@ -20,8 +20,17 @@ use CRM_Gmv_ExtensionUtil as E;
  */
 class CRM_Gmv_Entity_Organization extends CRM_Gmv_Entity_Contact
 {
-    /** @var string identifier marking EKIR itself */
-    protected $EKIR_SELF_ID = 'A1';
+    /** string identifier marking EKIR itself */
+    const EKIR_SELF_ID = 'A1';
+
+    /** string pattern marking Kirchenkreis */
+    const EKIR_KK_PATTERN = '/^15\d{4}?$/';
+
+    /** string pattern marking Kirchengemeinde */
+    const EKIR_KG_PATTERN = '/^15\d{6}?$/';
+
+    /** string pattern marking Pfarrstelle */
+    const EKIR_PS_PATTERN = '/^15\d{8}?$/';
 
     /** @var string[] raw column name to field name */
     protected $data_mapping = [
@@ -41,6 +50,8 @@ class CRM_Gmv_Entity_Organization extends CRM_Gmv_Entity_Contact
         'members' => 'gmv_data.gmv_member_count',
     ];
 
+    /** @var array list of organisations imported, identified by MDE */
+    protected $imported_ids = [];
 
     public function __construct($controller, $file)
     {
@@ -58,6 +69,24 @@ class CRM_Gmv_Entity_Organization extends CRM_Gmv_Entity_Contact
             $this->entity_data = $this->getRawData(array_keys($this->data_mapping));
             $this->renameKeys($this->data_mapping);
 
+            // filter for relevant types, see here: https://projekte.systopia.de/issues/16247#note-16
+            $purged_organisation_count = 0;
+            foreach (array_keys($this->entity_data) as $entity_key) {
+                $identifier = $this->entity_data[$entity_key]['gmv_data.gmv_data_identifier'];
+                $this->log($identifier);
+                if (    !preg_match(self::EKIR_PS_PATTERN, $identifier)
+                    &&  !preg_match(self::EKIR_KG_PATTERN, $identifier)
+                    &&  !preg_match(self::EKIR_KK_PATTERN, $identifier)
+                    &&  $identifier != self::EKIR_SELF_ID) {
+                    unset($this->entity_data[$entity_key]);
+                    $purged_organisation_count++;
+                } else {
+                    $gmv_id = $this->entity_data[$entity_key]['gmv_id'];
+                    $this->imported_ids[$gmv_id] = true;
+                }
+            }
+            $this->log("{$purged_organisation_count} organisations purged.");
+
             // custom adjustments
             foreach ($this->entity_data as &$entity_datum) {
                 // truncate 'organization_name' to 128
@@ -68,29 +97,18 @@ class CRM_Gmv_Entity_Organization extends CRM_Gmv_Entity_Contact
 
                 // derive contact_type and subtype
                 $entity_datum['contact_type'] = 'Organization';
-                if ($entity_datum['gmv_data.gmv_data_identifier'] == $this->EKIR_SELF_ID) {
-                    // this is EKIR itself, there's some special stuff
+                // this is *any* other entry:
+                if (preg_match(self::EKIR_PS_PATTERN, $entity_datum['gmv_data.gmv_data_identifier'])) {
+                    $entity_datum['contact_sub_type'] = 'Pfarrstelle';
+                } else if (preg_match(self::EKIR_KG_PATTERN, $entity_datum['gmv_data.gmv_data_identifier'])) {
+                    $entity_datum['contact_sub_type'] = 'Kirchengemeinde';
+                } else if (preg_match(self::EKIR_KK_PATTERN, $entity_datum['gmv_data.gmv_data_identifier'])) {
+                    $entity_datum['contact_sub_type'] = 'Kirchenkreis';
+                } else if ($entity_datum['gmv_data.gmv_data_identifier'] == self::EKIR_SELF_ID) {
                     $entity_datum['gmv_data.gmv_data_master_id'] = '';
                     $entity_datum['contact_sub_type'] = '';
                 } else {
-                    // this is *any* other entry:
-                    // todo: is there a better way?
-                    switch (strlen($entity_datum['gmv_data.gmv_data_identifier'])) {
-                        case 6:
-                            $entity_datum['contact_sub_type'] = 'Kirchenkreis';
-                            break;
-                        case 8:
-                            $entity_datum['contact_sub_type'] = 'Kirchengemeinde';
-                            break;
-                        case 10:
-                        default:
-                            $entity_datum['contact_sub_type'] = 'Kirchenstelle';
-                            break;
-//                        default:
-//                            $this->log("ID '{$entity_datum['external_identifier']}' is ill-formatted.");
-//                            $entity_datum['contact_sub_type'] = '';
-//                            break;
-                        }
+                    $this->log("Unexpected gmv_data_identifier: {$entity_datum['gmv_data.gmv_data_identifier']}", 'warn');
                 }
             }
         }
