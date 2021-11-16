@@ -22,13 +22,13 @@ class CRM_Gmv_DataStructures
 {
     const KIRCHENKREIS    = 'Kirchenkreis';
     const KIRCHENGEMEINDE = 'Kirchengemeinde';
-    const KIRCHENSTELLE   = 'Kirchenstelle';
+    const PFARRSTELLE     = 'Pfarrstelle';
 
     /**
      * Make sure the three contact types exist
      */
     public static function syncContactTypes() {
-        foreach ([self::KIRCHENKREIS, self::KIRCHENGEMEINDE, self::KIRCHENSTELLE] as $contact_type) {
+        foreach ([self::KIRCHENKREIS, self::KIRCHENGEMEINDE, self::PFARRSTELLE] as $contact_type) {
             $types = civicrm_api3('ContactType', 'get', [
                 'name' => $contact_type,
             ]);

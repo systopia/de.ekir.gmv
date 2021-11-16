@@ -34,7 +34,6 @@ class CRM_Gmv_Upgrader extends CRM_Gmv_Upgrader_Base
 
         // create custom data structures
         $customData = new CRM_Gmv_CustomData(E::LONG_NAME);
-        $customData->syncOptionGroup(E::path('resources/option_group_catechism.json'));
         $customData->syncCustomGroup(E::path('resources/custom_group_ekir_organisation.json'));
 
         // add XCM profiles
