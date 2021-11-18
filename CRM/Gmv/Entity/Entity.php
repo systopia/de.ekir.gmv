@@ -103,6 +103,24 @@ class CRM_Gmv_Entity_Entity extends CRM_Gmv_Entity_Base
     }
 
     /**
+     * @param string $attribute
+     *   attribute name
+     *
+     * @return array
+     *   attribute_value => counter
+     */
+    public function getAttributeOccurance($attribute)
+    {
+        $occurance = [];
+        foreach ($this->entity_data as $entity) {
+            $key = $entity[$attribute] ?? 'NOT_SET';
+            $counter = $occurance[$key] ?? 0;
+            $occurance[$key] = $counter + 1;
+        }
+        return $occurance;
+    }
+
+    /**
      * Set the following property to the given key for all entities
      *
      * @param string $key
@@ -288,6 +306,24 @@ class CRM_Gmv_Entity_Entity extends CRM_Gmv_Entity_Base
                 foreach ($this->entity_data as $main_key => &$entity_datum) {
                     $record_value = CRM_Utils_Array::value($field, $entity_datum);
                     if ($record_value !== $value) {
+                        $keys_to_delete[] = $main_key;
+                    }
+                }
+                break;
+
+            case 'in':
+                foreach ($this->entity_data as $main_key => &$entity_datum) {
+                    $record_value = CRM_Utils_Array::value($field, $entity_datum);
+                    if (!in_array($record_value, $value)) {
+                        $keys_to_delete[] = $main_key;
+                    }
+                }
+                break;
+
+            case 'not_in':
+                foreach ($this->entity_data as $main_key => &$entity_datum) {
+                    $record_value = CRM_Utils_Array::value($field, $entity_datum);
+                    if (in_array($record_value, $value)) {
                         $keys_to_delete[] = $main_key;
                     }
                 }

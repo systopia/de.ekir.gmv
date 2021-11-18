@@ -121,13 +121,15 @@ class CRM_Gmv_ImportController
         $this->loadLists();
         $this->loadOrganisations();
         $this->loadEmployments();
-//        $this->syncOrganisations();
+        $this->syncOrganisations();
         $this->loadContactDetails();
         $this->loadContacts();
-//        $this->syncContacts();
-//        $this->syncEmails();
-//        $this->syncPhones();
-//        $this->syncAddresses();
+        $this->syncContacts();
+        $this->purgeDetails();
+        $this->syncEmails();
+        $this->syncPhones();
+        $this->syncAddresses();
+        //$this->syncEmployments();
 //        $this->generateChangeActivities();
     }
 
@@ -561,6 +563,21 @@ class CRM_Gmv_ImportController
                 }
             }
         }
+    }
+
+    /**
+     * Restrict the details (email, address, phone) to the
+     *  contacts actually existing
+     */
+    public function purgeDetails()
+    {
+        $individual_ids = $this->individuals->getAttributeOccurance('gmv_id');
+        $organisation_ids = $this->organisations->getAttributeOccurance('gmv_id');
+        $importing_gmv_ids = array_merge(array_keys($individual_ids), array_keys($organisation_ids));
+        $this->emails->filterEntityData('contact_id', 'in', $importing_gmv_ids);
+        $this->phones->filterEntityData('contact_id', 'in', $importing_gmv_ids);
+        $this->websites->filterEntityData('contact_id', 'in', $importing_gmv_ids);
+        $this->addresses->filterEntityData('contact_id', 'in', $importing_gmv_ids);
     }
 
     /**
@@ -1162,7 +1179,7 @@ class CRM_Gmv_ImportController
 
         // write log
         $timestamp = date('Y-m-d H:i:s');
-        fprintf($log_file, "{$timestamp} [{$level}]: {$message}\n");
+        fprintf($log_file, "{$timestamp} [{$level}]: {$message}\n", null);
     }
 
     /**
