@@ -80,6 +80,12 @@ class CRM_Gmv_Entity_Individual extends CRM_Gmv_Entity_Contact
             // only keep 'historic=t' values
             $this->filterEntityData('_historic', 'equals', 'f');
             $this->dropEntityAttribute('_historic');
+
+            // filter down to individuals with a job with an existing organisation
+            $this->joinData($this->controller->employments, 'gmv_id', 'contact_id_a', ['contact_id_b']);
+            $this->filterEntityData('contact_id_b', 'not_empty');
+            $this->dropEntityAttribute('contact_id_b');
+
         }
 
         return $this;

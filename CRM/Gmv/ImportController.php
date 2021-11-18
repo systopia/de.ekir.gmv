@@ -95,30 +95,40 @@ class CRM_Gmv_ImportController
     /** @var CRM_Gmv_Entity_Entity website data, not linked to contacts (yet) */
     public $websites = null;
 
+    /** @var CRM_Gmv_Entity_Entity $employment relationship data */
+    public $employments = null;
+
     /** @var CRM_Gmv_Entity_Individual contact data */
     public $individuals = null;
 
+    /** @var CRM_Gmv_Entity_Organization contact data */
+    public $organizations = null;
+
     /** @var CRM_Gmv_Entity_Individual contact data prepped for XCM */
     public $individuals_xcm = null;
+
+    /** @var array person id -> organisation id */
+    public $_individual2organisation = null;
 
     /**
      * Run the given import
      */
     public function run()
     {
-        $this->fillGmvIdCache();
         $this->log("Starting GMV importer on: " . $this->getFolder());
+        $this->fillGmvIdCache();
         $this->syncDataStructures();
         $this->loadLists();
-        $this->loadContactDetails();
         $this->loadOrganisations();
-        $this->syncOrganisations();
+        $this->loadEmployments();
+//        $this->syncOrganisations();
+        $this->loadContactDetails();
         $this->loadContacts();
-        $this->syncContacts();
-        $this->syncEmails();
-        $this->syncPhones();
-        $this->syncAddresses();
-        $this->generateChangeActivities();
+//        $this->syncContacts();
+//        $this->syncEmails();
+//        $this->syncPhones();
+//        $this->syncAddresses();
+//        $this->generateChangeActivities();
     }
 
 
@@ -332,7 +342,6 @@ class CRM_Gmv_ImportController
         // todo: do we need this?
         $this->log("Syncing data structures");
         $customData = new CRM_Gmv_CustomData(E::LONG_NAME);
-        $customData->syncOptionGroup(E::path('resources/option_group_catechism.json'));
         $customData->syncCustomGroup(E::path('resources/custom_group_ekir_organisation.json'));
     }
 
@@ -385,15 +394,16 @@ class CRM_Gmv_ImportController
      */
     protected function loadOrganisations()
     {
-        $this->organisations = (new CRM_Gmv_Entity_Organization($this,
-                $this->getImportFile('ekir_gmv/organization.csv')))->load();
+        if (!isset($this->organisations)) {
+            $this->organisations = (new CRM_Gmv_Entity_Organization($this,
+                    $this->getImportFile('ekir_gmv/organization.csv')))->load();
 
-        $this->log("Organization data loaded.");
+            $this->log("Organization data loaded.");
+        }
     }
 
-
     /**
-     * Apply the option groups
+     * Load the contacts
      */
     protected function loadContacts()
     {
@@ -406,6 +416,15 @@ class CRM_Gmv_ImportController
         $this->log("Contact data loaded.");
     }
 
+    /**
+     * Load the contact emplyment relationship
+     */
+    protected function loadEmployments()
+    {
+        $this->employments = (new CRM_Gmv_Entity_Employment($this,
+                $this->getImportFile('ekir_gmv/employment.csv')))->load();
+        $this->log("Employment data loaded.");
+    }
 
 
     /*****************************************************************

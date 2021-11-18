@@ -31,7 +31,7 @@ class CRM_Gmv_Entity_List extends CRM_Gmv_Entity_Base
 
 
     /**
-     * value => label
+     * @var array value => label
      */
     protected $data = null;
 
@@ -77,5 +77,18 @@ class CRM_Gmv_Entity_List extends CRM_Gmv_Entity_Base
             }
             return $this->default_value;
         }
+    }
+
+
+    /**
+     * Get the mapping array
+     *
+     * @return array
+     *   key -> value array
+     */
+    public function getMapping()
+    {
+        $this->load();
+        return $this->data;
     }
 }
