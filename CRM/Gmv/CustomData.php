@@ -158,8 +158,8 @@ class CRM_Gmv_CustomData {
                       'return' => 'id'
                   ]);
               }
-              if ($relationship_type) {
-                  $extends_list[] = $relationship_type;
+              if ($relationship_type['id']) {
+                  $extends_list[] = $relationship_type['id'];
               }
           }
           $data['extends_entity_column_value'] = $extends_list;

@@ -29,7 +29,7 @@ class CRM_Gmv_Entity_Employment extends CRM_Gmv_Entity_Entity
         'employee_id' => 'contact_id_a',
         'employer_id' => 'contact_id_b',
         'occupation_id' => 'gmv_employee.gmv_employee_job',
-        'designation' => 'gmv_employee.gmv_employee_designation',
+        'designation' => 'description',
         'end_reason' => 'gmv_employee.gmv_employee_end_reason',
         'historical' => 'historical',
     ];

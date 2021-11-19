@@ -54,6 +54,14 @@ class CRM_Gmv_DataStructures
     {
         static $employment_relationship_type = null;
         if ($employment_relationship_type === null) {
+            $employment_relationship_type = civicrm_api3('RelationshipType', 'getsingle', [
+                'name_a_b' => 'Employee of',
+            ]);
+        }
+        return $employment_relationship_type;
+
+        /* DISABLED: we won't use our custom type:
+        if ($employment_relationship_type === null) {
             // find the employment type
             $employment_relationship_type_id = null;
             $type_search = civicrm_api3('RelationshipType', 'get', [
@@ -84,6 +92,7 @@ class CRM_Gmv_DataStructures
         }
 
         return $employment_relationship_type;
+        */
     }
 
 

@@ -117,19 +117,23 @@ class CRM_Gmv_ImportController
     {
         $this->log("Starting GMV importer on: " . $this->getFolder());
         $this->fillGmvIdCache();
-        $this->syncDataStructures();
         $this->loadLists();
+        $this->syncDataStructures();
         $this->loadOrganisations();
         $this->loadEmployments();
         $this->syncOrganisations();
         $this->loadContactDetails();
         $this->loadContacts();
         $this->syncContacts();
+        // details
         $this->purgeDetails();
         $this->syncEmails();
         $this->syncPhones();
         $this->syncAddresses();
-        //$this->syncEmployments();
+
+        // employments
+        $this->syncEmployments();
+
 //        $this->generateChangeActivities();
     }
 
@@ -341,10 +345,17 @@ class CRM_Gmv_ImportController
      */
     protected function syncDataStructures()
     {
-        // todo: do we need this?
+        // update option groups
+        $this->log("Syncing option groups");
+        $this->occupations->syncToOptionGroup('gmv_employee_job', "Job Titel");
+
+        // update data structures
         $this->log("Syncing data structures");
+        CRM_Gmv_DataStructures::getEmploymentRelationshipType();
         $customData = new CRM_Gmv_CustomData(E::LONG_NAME);
+        $customData->syncCustomGroup(E::path('resources/custom_group_ekir_employment.json'));
         $customData->syncCustomGroup(E::path('resources/custom_group_ekir_organisation.json'));
+
     }
 
     /**
@@ -578,6 +589,8 @@ class CRM_Gmv_ImportController
         $this->phones->filterEntityData('contact_id', 'in', $importing_gmv_ids);
         $this->websites->filterEntityData('contact_id', 'in', $importing_gmv_ids);
         $this->addresses->filterEntityData('contact_id', 'in', $importing_gmv_ids);
+        $this->employments->filterEntityData('contact_id_a', 'in', $importing_gmv_ids);
+        $this->employments->filterEntityData('contact_id_b', 'in', $importing_gmv_ids);
     }
 
     /**
@@ -891,6 +904,45 @@ class CRM_Gmv_ImportController
         $this->log("Synchronising addresses done.", 'info');
     }
 
+    /**
+     * Synchronise the employments
+     */
+    public function syncEmployments()
+    {
+        // compile our records
+        $relationship_type = CRM_Gmv_DataStructures::getEmploymentRelationshipType();
+        $records = $this->employments->getAllRecords();
+        foreach ($records as $record) {
+            $create_record = $record;
+            $create_record['contact_id_a'] = $this->getGmvContactId("{$record['contact_id_a']}");
+            $create_record['contact_id_b'] = $this->getGmvContactId("{$record['contact_id_b']}");
+            $create_record['relationship_type_id'] = $relationship_type['id'];
+            if (empty($create_record['contact_id_a']) || empty($create_record['contact_id_b'])) {
+                $this->log("Contacts missing!");
+            }
+            CRM_Gmv_CustomData::resolveCustomFields($create_record);
+            civicrm_api3('Relationship', 'create', $create_record);
+
+//            // DON'T: automatically creates extra relationship m(
+//            // apparently we also have to set the employer_id manually
+//            civicrm_api3('Contact', 'create', [
+//                'id' => $create_record['contact_id_a'],
+//                'employer_id' => $create_record['contact_id_b']
+//            ]);
+
+            $this->log("Created employer relationship between [GMV-{$record['contact_id_a']}] and [GMV-{$record['contact_id_b']}]");
+        }
+
+        // run a query to set the employer_ids
+        CRM_Core_DAO::executeQuery("
+                        UPDATE civicrm_contact contact
+            LEFT JOIN civicrm_relationship relationship 
+                 ON relationship.contact_id_a = contact.id
+                 AND relationship.relationship_type_id = {$relationship_type['id']}
+            SET employer_id = relationship.contact_id_b
+            WHERE contact.employer_id IS NULL;
+        ");
+    }
 
 
 

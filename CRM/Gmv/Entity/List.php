@@ -79,7 +79,6 @@ class CRM_Gmv_Entity_List extends CRM_Gmv_Entity_Base
         }
     }
 
-
     /**
      * Get the mapping array
      *
@@ -90,5 +89,92 @@ class CRM_Gmv_Entity_List extends CRM_Gmv_Entity_Base
     {
         $this->load();
         return $this->data;
+    }
+
+    /**
+     * Sync this list value/label to a CiviCRM option group
+     *
+     * @param string $group_name
+     * @param string $group_title
+     * @param string $missing_values w
+     *   hat to do with existing values missing in new imported list. Options:
+     *     'ignore'  - do nothing
+     *     'disable' - mark option value as disabled
+     *     'delete'  - delete this option value (caution!)
+     */
+    public function syncToOptionGroup($group_name, $group_title, $missing_values = 'ignore')
+    {
+        // first, make sure the option group exists
+        $requested_values = $this->getMapping();
+        $requested_value_count = count($requested_values);
+        $this->log("Syncing {$requested_value_count} values with option group '{$group_title}'");
+        $option_group = civicrm_api3('OptionGroup', 'get', ['name' => $group_name]);
+        if (!empty($option_group['id'])) {
+            $option_group_id = $option_group['id'];
+        } else {
+            $this->log("Option group '{$group_name}' not found, will create");
+            $result = civicrm_api3('OptionGroup', 'create', [
+                'name' => $group_name,
+                'title' => $group_title,
+                'is_active' => 1,
+            ]);
+            $option_group_id = $result['id'];
+        }
+
+        // now, syncing the option values
+        $current_value_query = civicrm_api3('OptionValue', 'get', [
+            'option_group_id' => $option_group_id,
+            'option.limit'    => 0,
+            'return'          => 'value,label,id'
+        ]);
+        foreach ($current_value_query['values'] as $option_value) {
+            $value = $option_value['value'];
+            if (isset($requested_values[$value])) {
+                // value found. Update title if required
+                if ($option_value['label'] != $requested_values[$value]) {
+                    $this->log("Updating label for value '{$value}' to '{$requested_values[$value]}'.");
+                    civicrm_api3('OptionValue', 'create', [
+                        'id'    => $option_value['id'],
+                        'label' => $requested_values[$value],
+                    ]);
+                }
+
+            } else {
+                // value is in the system, but not on our list
+                switch ($missing_values) {
+                    case 'disable':
+                        civicrm_api3('OptionValue', 'create', [
+                            'id'        => $option_value['id'],
+                            'is_active' => 0,
+                        ]);
+                        $this->log("Deactivated option value '{$value}'.");
+                        break;
+
+                    case 'delete':
+                        civicrm_api3('OptionValue', 'delete', [
+                            'id'        => $option_value['id'],
+                        ]);
+                        $this->log("Deleted option value '{$value}'.");
+                        break;
+
+                    case 'ignore':
+                        break;
+                }
+            }
+
+            // finally, remove from list
+            unset($requested_values[$value]);
+        }
+
+        // these are the left-overs, these need to be created
+        foreach ($requested_values as $option_value => $option_label) {
+            civicrm_api3('OptionValue', 'create', [
+                'value' => $option_value,
+                'label' => $option_label,
+                'option_group_id' => $option_group_id,
+            ]);
+            $this->log("Created option value '{$option_value}'.");
+        }
+        $this->log("Syncing of {$requested_value_count} values with option group '{$group_title}' completed.");
     }
 }
