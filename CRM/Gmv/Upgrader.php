@@ -32,9 +32,13 @@ class CRM_Gmv_Upgrader extends CRM_Gmv_Upgrader_Base
         // make sure the church contact type exists
         CRM_Gmv_DataStructures::syncContactTypes();
 
+        // make sure the church contact type exists
+        CRM_Gmv_DataStructures::getEmploymentRelationshipType();
+
         // create custom data structures
         $customData = new CRM_Gmv_CustomData(E::LONG_NAME);
         $customData->syncCustomGroup(E::path('resources/custom_group_ekir_organisation.json'));
+        $customData->syncCustomGroup(E::path('resources/custom_group_ekir_employment.json'));
 
         // add XCM profiles
         // TODO: ?

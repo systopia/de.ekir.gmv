@@ -5,7 +5,7 @@
 | Author: B. Endres (endres@systopia.de)                 |
 | Source: https://github.com/systopia/Custom-Data-Helper |
 +--------------------------------------------------------+
-| This program is released as free software under the    |
+| This program is relFeased as free software under the    |
 | Affero GPL license. You can redistribute it and/or     |
 | modify it under the terms of this license which you    |
 | can read by viewing the included agpl.txt or online    |
@@ -134,16 +134,35 @@ class CRM_Gmv_CustomData {
     if (isset($data['extends_entity_column_value'])) {
       $force_update = TRUE; // this doesn't get returned by the API, so differences couldn't be detected
       if ($data['extends'] == 'Activity') {
-        $extends_list = array();
+        $extends_list = [];
         foreach ($data['extends_entity_column_value'] as $activity_type) {
           if (!is_numeric($activity_type)) {
-            $activity_type = CRM_Core_OptionGroup::getValue('activity_type', $activity_type, 'name');
+            $activity_type = civicrm_api3('OptionValue', 'getsingle', [
+                'option_group_id' => 'activity_type',
+                'name' => $activity_type,
+                'return' => 'value'
+            ]);
           }
           if ($activity_type) {
             $extends_list[] = $activity_type;
           }
         }
         $data['extends_entity_column_value'] = $extends_list;
+
+      } elseif ($data['extends'] == 'Relationship') {
+          $extends_list = [];
+          foreach ($data['extends_entity_column_value'] as $relationship_type) {
+              if (!is_numeric($relationship_type)) {
+                  $relationship_type = civicrm_api3('RelationshipType', 'getsingle', [
+                      'name_a_b' => $relationship_type,
+                      'return' => 'id'
+                  ]);
+              }
+              if ($relationship_type) {
+                  $extends_list[] = $relationship_type;
+              }
+          }
+          $data['extends_entity_column_value'] = $extends_list;
       }
 
       if (is_array($data['extends_entity_column_value'])) {

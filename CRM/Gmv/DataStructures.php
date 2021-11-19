@@ -48,6 +48,47 @@ class CRM_Gmv_DataStructures
     }
 
     /**
+     * Make sure the three contact types exist
+     */
+    public static function getEmploymentRelationshipType()
+    {
+        static $employment_relationship_type = null;
+        if ($employment_relationship_type === null) {
+            // find the employment type
+            $employment_relationship_type_id = null;
+            $type_search = civicrm_api3('RelationshipType', 'get', [
+                'name_a_b' => 'ekir_employed_at',
+                'return' => 'id'
+            ]);
+            if (empty($type_search['id'])) {
+                // this has not been found and needs to be created
+                $type_creation = civicrm_api3('RelationshipType', 'create', [
+                    'label_a_b' => "Angestellt bei",
+                    'name_a_b' => 'ekir_employed_at',
+                    'label_b_a' => 'Beschäftigt',
+                    'name_b_a' => 'ekir_employs',
+                    'description' => 'Anstellung (via GMV)',
+                    'contact_type_a' => 'Individual',
+                    'contact_type_b' => 'Organization',
+                    'is_active' => 1,
+                ]);
+                $employment_relationship_type_id = $type_creation['id'];
+            } else {
+                $employment_relationship_type_id = $type_search['id'];
+            }
+
+            // load the relationship type
+            $employment_relationship_type = civicrm_api3('RelationshipType', 'getsingle', [
+                'id' => $employment_relationship_type_id
+            ]);
+        }
+
+        return $employment_relationship_type;
+    }
+
+
+
+    /**
      * Make sure the identity tracker type exists
      */
     public static function addIdentityTrackerType()
