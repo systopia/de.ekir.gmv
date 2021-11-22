@@ -20,7 +20,11 @@ use CRM_Gmv_ExtensionUtil as E;
  */
 class CRM_Gmv_ImportController
 {
+    /** @var string folder name  */
     const BASE_FOLDER = 'GMV_Imports';
+
+    /** @var string XCM profile name to be used for individuals */
+    const XCM_PROFILE_INDIVIDUALS = 'gmv_xcm_profile_individuals';
 
     /** @var string folder to work on */
     protected $folder = null;
@@ -532,6 +536,7 @@ class CRM_Gmv_ImportController
         // FIRST: run through XCM (for change notifications)
         $this->log("Starting XCM synchronisation", 'info');
         $xcm_profile = Civi::settings()->get('gmv_xcm_profile_individuals');
+        if (empty($xcm_profile)) throw new Exception("XCM profile for individuals not set. See civicrm/gmv/zipupload");
         foreach ($this->individuals_xcm->getAllRecords() as $record) {
             // first: find contact by gmv_id
             $existing_contact_id = $this->getGmvContactId($record['gmv_id']);
@@ -605,7 +610,7 @@ class CRM_Gmv_ImportController
         // generate expected email by contact list
         $records = $this->emails->getAllRecords();
         foreach ($records as $record) {
-            $contact_id = $this->getGmvContactId($record['contact_id'], true);
+            $contact_id = $this->getGmvContactId($record['contact_id']);
             if ($contact_id) {
                 $record['contact_id'] = $contact_id;
                 $contact2email_wanted[$contact_id][] = $record;
@@ -697,7 +702,7 @@ class CRM_Gmv_ImportController
         // generate expected phone by contact list
         $records = $this->phones->getAllRecords();
         foreach ($records as $record) {
-            $contact_id = $this->getGmvContactId($record['contact_id'], true);
+            $contact_id = $this->getGmvContactId($record['contact_id']);
             if ($contact_id) {
                 $record['contact_id'] = $contact_id;
                 $contact2phone_wanted[$contact_id][] = $record;
@@ -794,7 +799,7 @@ class CRM_Gmv_ImportController
         // generate expected address by contact list
         $records = $this->addresses->getAllRecords();
         foreach ($records as $record) {
-            $contact_id = $this->getGmvContactId($record['contact_id'], true);
+            $contact_id = $this->getGmvContactId($record['contact_id']);
             if ($contact_id) {
                 $record['contact_id'] = $contact_id;
                 $contact2address_wanted[$contact_id][] = $record;
@@ -906,6 +911,8 @@ class CRM_Gmv_ImportController
 
     /**
      * Synchronise the employments
+     *
+     * @todo THIS IS JUST AN IMPORT, IMPLEMENT SYNCING!
      */
     public function syncEmployments()
     {
@@ -920,26 +927,26 @@ class CRM_Gmv_ImportController
             if (empty($create_record['contact_id_a']) || empty($create_record['contact_id_b'])) {
                 $this->log("Contacts missing!");
             }
-            CRM_Gmv_CustomData::resolveCustomFields($create_record);
-            civicrm_api3('Relationship', 'create', $create_record);
-
-//            // DON'T: automatically creates extra relationship m(
-//            // apparently we also have to set the employer_id manually
-//            civicrm_api3('Contact', 'create', [
-//                'id' => $create_record['contact_id_a'],
-//                'employer_id' => $create_record['contact_id_b']
-//            ]);
-
-            $this->log("Created employer relationship between [GMV-{$record['contact_id_a']}] and [GMV-{$record['contact_id_b']}]");
+            try {
+                CRM_Gmv_CustomData::resolveCustomFields($create_record);
+                civicrm_api3('Relationship', 'create', $create_record);
+                $this->log("Created employer relationship between [GMV-{$record['contact_id_a']}] and [GMV-{$record['contact_id_b']}]");
+            } catch (CiviCRM_API3_Exception $ex) {
+                $this->log("Error while creating employer relationship between [GMV-{$record['contact_id_a']}] and [GMV-{$record['contact_id_b']}]: " . $ex->getMessage(), 'warn');
+            }
         }
 
         // run a query to set the employer_ids
         CRM_Core_DAO::executeQuery("
-                        UPDATE civicrm_contact contact
+            UPDATE civicrm_contact contact
             LEFT JOIN civicrm_relationship relationship 
                  ON relationship.contact_id_a = contact.id
                  AND relationship.relationship_type_id = {$relationship_type['id']}
-            SET employer_id = relationship.contact_id_b
+            LEFT JOIN civicrm_contact organisation
+                 ON relationship.contact_id_b = organisation.id
+            SET 
+                contact.employer_id = relationship.contact_id_b,
+                contact.organization_name = organisation.display_name
             WHERE contact.employer_id IS NULL;
         ");
     }
@@ -1231,7 +1238,7 @@ class CRM_Gmv_ImportController
 
         // write log
         $timestamp = date('Y-m-d H:i:s');
-        fprintf($log_file, "{$timestamp} [{$level}]: {$message}\n", null);
+        fputs($log_file, "{$timestamp} [{$level}]: {$message}\n");
     }
 
     /**
