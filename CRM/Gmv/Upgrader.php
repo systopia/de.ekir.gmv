@@ -41,20 +41,38 @@ class CRM_Gmv_Upgrader extends CRM_Gmv_Upgrader_Base
         $customData->syncCustomGroup(E::path('resources/custom_group_ekir_employment.json'));
 
         // add XCM profiles
-        // TODO: ?
+        $this->installXcmProfile(
+            CRM_Gmv_ImportController::XCM_PROFILE_INDIVIDUALS,
+            json_decode(file_get_contents(E::path('resources/xcm_individuals.json')))
+        );
     }
 
     /**
-     * Example: Run a couple simple queries.
+     * Installs an XCM profile, if it does not exist.
      *
-     * @return TRUE on success
-     * @throws Exception
+     * @param $name
+     *   The XCM profile name.
+     * @param $raw_json_data
+     *   The XCM profile data in JSON format.
      */
-    // public function upgrade_4200() {
-    //   $this->ctx->log->info('Applying update 4200');
-    //   CRM_Core_DAO::executeQuery('UPDATE foo SET bar = "whiz"');
-    //   CRM_Core_DAO::executeQuery('DELETE FROM bang WHERE willy = wonka(2)');
-    //   return TRUE;
-    // }
+    protected function installXcmProfile($name, $raw_json_data)
+    {
+        $profile_list = CRM_Xcm_Configuration::getProfileList();
+        if (!isset($profile_list[$name])) {
+            // not here? create!
+            $profile_data = Civi::settings()->get('xcm_config_profiles');
+            $profile = json_decode($raw_json_data, true);
+
+            // Resolve custom field names.
+//            foreach (['fill_fields', 'override_fields'] as $fields) {
+//                $definition = array_flip($profile['options'][$fields]);
+//                CRM_Gmv_CustomData::resolveCustomFields($definition);
+//                $profile['options'][$fields] = array_flip($definition);
+//            }
+
+            $profile_data[$name] = $profile;
+            Civi::settings()->set('xcm_config_profiles', $profile_data);
+        }
+    }
 
 }

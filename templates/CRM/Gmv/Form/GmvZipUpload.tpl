@@ -26,11 +26,13 @@
   <div class="clear"></div>
 </div>
 
+{* DISABLED FOR NOW
 <div class="crm-section">
   <div class="label">{$form.gmv_xcm_profile_organisations.label}</div>
   <div class="content">{$form.gmv_xcm_profile_organisations.html}</div>
   <div class="clear"></div>
 </div>
+*}
 
 <div class="crm-section">
   <div class="label">{$form.gmv_change_activity_type_id.label}</div>

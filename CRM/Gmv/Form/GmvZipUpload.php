@@ -66,8 +66,8 @@ class CRM_Gmv_Form_GmvZipUpload extends CRM_Core_Form
 
         // default values:
         $this->setDefaults([
-            'gmv_xcm_profile_individuals' => Civi::settings()->get('gmv_xcm_profile_individuals'),
-            'gmv_xcm_profile_organisations' => Civi::settings()->get('gmv_xcm_profile_organisations'),
+            'gmv_xcm_profile_individuals' => Civi::settings()->get(CRM_Gmv_ImportController::XCM_PROFILE_INDIVIDUALS),
+//            'gmv_xcm_profile_organisations' => Civi::settings()->get('gmv_xcm_profile_organisations'),
             'gmv_change_activity_type_id' => Civi::settings()->get('gmv_change_activity_type_id'),
         ]);
 
@@ -87,8 +87,8 @@ class CRM_Gmv_Form_GmvZipUpload extends CRM_Core_Form
     {
         // store new settings
         $values = $this->exportValues();
-        Civi::settings()->set('gmv_xcm_profile_individuals', $values['gmv_xcm_profile_individuals']);
-        Civi::settings()->set('gmv_xcm_profile_organisations', $values['gmv_xcm_profile_organisations']);
+        Civi::settings()->set(CRM_Gmv_ImportController::XCM_PROFILE_INDIVIDUALS, $values['gmv_xcm_profile_individuals']);
+        //Civi::settings()->set('gmv_xcm_profile_organisations', $values['gmv_xcm_profile_organisations']);
         Civi::settings()->set('gmv_change_activity_type_id', $values['gmv_change_activity_type_id']);
 
         $zip_file_data = $this->_submitFiles['gmv_zip'];
