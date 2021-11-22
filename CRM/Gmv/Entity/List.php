@@ -167,13 +167,17 @@ class CRM_Gmv_Entity_List extends CRM_Gmv_Entity_Base
         }
 
         // these are the left-overs, these need to be created
+        $counter = 0;
         foreach ($requested_values as $option_value => $option_label) {
             civicrm_api3('OptionValue', 'create', [
                 'value' => $option_value,
                 'label' => $option_label,
                 'option_group_id' => $option_group_id,
             ]);
-            $this->log("Created option value '{$option_value}'.");
+            $counter++;
+            if (!($counter % 100)) {
+                $this->log("{$counter} option values synchronised...");
+            }
         }
         $this->log("Syncing of {$requested_value_count} values with option group '{$group_title}' completed.");
     }
