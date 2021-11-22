@@ -31,8 +31,8 @@ class CRM_Gmv_Form_GmvZipUpload extends CRM_Core_Form
             'gmv_xcm_profile_individuals',
             "Verarbeitungsprofil für Personen (XCM)",
             CRM_Xcm_Configuration::getProfileList(),
-            ['class' => 'crm-select2 huge'],
-            true
+            true,
+            ['class' => 'crm-select2 huge']
         );
 
         $this->add(
@@ -40,8 +40,8 @@ class CRM_Gmv_Form_GmvZipUpload extends CRM_Core_Form
             'gmv_xcm_profile_organisations',
             "Verarbeitungsprofil für Organisationen (XCM)",
             CRM_Xcm_Configuration::getProfileList(),
-            ['class' => 'crm-select2 huge'],
-            true
+            false,
+            ['class' => 'crm-select2 huge']
         );
 
         $this->add(
@@ -49,8 +49,8 @@ class CRM_Gmv_Form_GmvZipUpload extends CRM_Core_Form
             'gmv_change_activity_type_id',
             "Aktivitätstyp für Änderungsaufzeichnung",
             $this->getActivityTypes(),
-            ['class' => 'crm-select2 huge'],
-            true
+            true,
+            ['class' => 'crm-select2 huge']
         );
 
         $this->add(
@@ -67,7 +67,7 @@ class CRM_Gmv_Form_GmvZipUpload extends CRM_Core_Form
         // default values:
         $this->setDefaults([
             'gmv_xcm_profile_individuals' => Civi::settings()->get(CRM_Gmv_ImportController::XCM_PROFILE_INDIVIDUALS),
-//            'gmv_xcm_profile_organisations' => Civi::settings()->get('gmv_xcm_profile_organisations'),
+            'gmv_xcm_profile_organisations' => Civi::settings()->get('gmv_xcm_profile_organisations'),
             'gmv_change_activity_type_id' => Civi::settings()->get('gmv_change_activity_type_id'),
         ]);
 
