@@ -37,13 +37,14 @@ class CRM_Gmv_Upgrader extends CRM_Gmv_Upgrader_Base
 
         // create custom data structures
         $customData = new CRM_Gmv_CustomData(E::LONG_NAME);
+        $customData->syncOPtionGroup(E::path('resources/option_group_gmv_employee_job.json'));
         $customData->syncCustomGroup(E::path('resources/custom_group_ekir_organisation.json'));
         $customData->syncCustomGroup(E::path('resources/custom_group_ekir_employment.json'));
 
         // add XCM profiles
         $this->installXcmProfile(
             CRM_Gmv_ImportController::XCM_PROFILE_INDIVIDUALS,
-            json_decode(file_get_contents(E::path('resources/xcm_individuals.json')))
+            json_decode(file_get_contents(E::path('resources/xcm_individuals.json')), true)
         );
     }
 
@@ -61,17 +62,8 @@ class CRM_Gmv_Upgrader extends CRM_Gmv_Upgrader_Base
         if (!isset($profile_list[$name])) {
             // not here? create!
             $profile_data = Civi::settings()->get('xcm_config_profiles');
-            $profile = json_decode($raw_json_data, true);
-
-            // Resolve custom field names.
-//            foreach (['fill_fields', 'override_fields'] as $fields) {
-//                $definition = array_flip($profile['options'][$fields]);
-//                CRM_Gmv_CustomData::resolveCustomFields($definition);
-//                $profile['options'][$fields] = array_flip($definition);
-//            }
-
-            $profile_data[$name] = $profile;
-            Civi::settings()->set('xcm_config_profiles', $profile_data);
+            $profile_data[$name] = $raw_json_data;
+            Civi::settings()->set(CRM_Gmv_ImportController::XCM_PROFILE_INDIVIDUALS, $name);
         }
     }
 

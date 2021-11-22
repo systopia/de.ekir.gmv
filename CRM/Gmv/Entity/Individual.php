@@ -49,8 +49,8 @@ class CRM_Gmv_Entity_Individual extends CRM_Gmv_Entity_Contact
     ];
 
     protected $prefix_map = [  // todo: live lookup needed?
-        '0' => '2', // Herr
-        '1' => '1', // Frau
+        '0' => '6', // Herr
+        '1' => '5', // Frau
     ];
 
     public function __construct($controller, $file)
@@ -69,6 +69,7 @@ class CRM_Gmv_Entity_Individual extends CRM_Gmv_Entity_Contact
             $this->entity_data = $this->getRawData(array_keys($this->data_mapping));
             $this->renameKeys($this->data_mapping);
             $this->setEntityValues('contact_type', 'Individual');
+            $this->setEntityValues('contact_sub_type', CRM_Gmv_DataStructures::PFARRER); // for now, all contacts are 'Pfarrer's
             $this->copyEntityValue('gender_id', 'prefix_id');
 
             // do some lookups

@@ -23,12 +23,20 @@ class CRM_Gmv_DataStructures
     const KIRCHENKREIS    = 'Kirchenkreis';
     const KIRCHENGEMEINDE = 'Kirchengemeinde';
     const PFARRSTELLE     = 'Pfarrstelle';
+    const PFARRER         = 'Pfarrer';
+
 
     /**
      * Make sure the three contact types exist
      */
     public static function syncContactTypes() {
-        foreach ([self::KIRCHENKREIS, self::KIRCHENGEMEINDE, self::PFARRSTELLE] as $contact_type) {
+        $subtype_to_contact_type = [
+            self::KIRCHENKREIS    => 3, // Organization
+            self::KIRCHENGEMEINDE => 3, // Organization
+            self::PFARRSTELLE     => 3, // Organization
+            self::PFARRER         => 1, // Organization
+        ];
+        foreach ($subtype_to_contact_type as $contact_type => $parent_contact_type) {
             $types = civicrm_api3('ContactType', 'get', [
                 'name' => $contact_type,
             ]);
@@ -41,7 +49,7 @@ class CRM_Gmv_DataStructures
                     'name' => $contact_type,
                     'label' => $contact_type,
                     'image_URL' => E::url('icons/church_contact_type.png'),
-                    'parent_id' => 3, // 'Organisation'
+                    'parent_id' => $parent_contact_type,
                 ]);
             }
         }
