@@ -558,7 +558,8 @@ class CRM_Gmv_ImportController
                     $this->setGmvContactID($contact_id, $record['gmv_id']);
                 }
             } catch (CiviCRM_API3_Exception $ex) {
-                $this->log("XCM FAILED: " . $ex->getMessage(), 'error');
+                $this->log("XCM FAILED ['GMV-{$record['gmv_id']}']. Error is:  " . $ex->getMessage(), 'error');
+                $this->log("XCM FAILED ['GMV-{$record['gmv_id']}']. Record is: " . json_encode($record), 'debug');
             }
         }
 
