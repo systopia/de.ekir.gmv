@@ -73,8 +73,8 @@ class CRM_Gmv_Entity_Organization extends CRM_Gmv_Entity_Contact
             $purged_organisation_count = 0;
             foreach (array_keys($this->entity_data) as $entity_key) {
                 $identifier = $this->entity_data[$entity_key]['gmv_data.gmv_data_identifier'];
-                if (    !preg_match(self::EKIR_PS_PATTERN, $identifier)
-                    &&  !preg_match(self::EKIR_KG_PATTERN, $identifier)
+                if (    !preg_match(self::EKIR_KG_PATTERN, $identifier)
+                    // disabled Pfarrstellen: &&  !preg_match(self::EKIR_PS_PATTERN, $identifier)
                     &&  !preg_match(self::EKIR_KK_PATTERN, $identifier)
                     &&  $identifier != self::EKIR_SELF_ID) {
                     unset($this->entity_data[$entity_key]);

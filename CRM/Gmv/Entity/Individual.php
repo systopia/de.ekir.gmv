@@ -66,6 +66,9 @@ class CRM_Gmv_Entity_Individual extends CRM_Gmv_Entity_Contact
     public function load()
     {
         if (!$this->entity_data) {
+            // disabled: loading individuals:
+            $this->entity_data = []; return $this;
+
             $this->entity_data = $this->getRawData(array_keys($this->data_mapping));
             $this->renameKeys($this->data_mapping);
             $this->setEntityValues('contact_type', 'Individual');

@@ -128,7 +128,7 @@ class CRM_Gmv_ImportController
         $this->syncOrganisations();
         $this->loadContactDetails();
         $this->loadContacts();
-        $this->syncContacts();
+//        $this->syncContacts();
         // details
         $this->purgeDetails();
         $this->syncEmails();
@@ -136,7 +136,7 @@ class CRM_Gmv_ImportController
         $this->syncAddresses();
 
         // employments
-        $this->syncEmployments();
+//        $this->syncEmployments();
 
 //        $this->generateChangeActivities();
     }
@@ -359,7 +359,6 @@ class CRM_Gmv_ImportController
         $customData = new CRM_Gmv_CustomData(E::LONG_NAME);
         $customData->syncCustomGroup(E::path('resources/custom_group_ekir_employment.json'));
         $customData->syncCustomGroup(E::path('resources/custom_group_ekir_organisation.json'));
-
     }
 
     /**
